@@ -915,6 +915,27 @@ class TestRecordEdges(FakeTools):
         self.assertRegex(names[0], r"^\d{8}-\d{6}-\d{6}-\d+$")
         self.assertIn("Backups: %s" % (self.state() / "backups" / names[0]), p.stdout)
 
+    # The state folder goes with the record when nothing else is in it, and stays while it holds backups.
+    def test_plugin_cycle_removes_state_folder(self):
+        self.ok(self.install())
+        self.assertTrue(self.record.exists())
+        p = self.ok(self.install("--uninstall"))
+        self.assertFalse(self.state().exists(), p.stdout + p.stderr)
+
+    def test_user_level_cycle_removes_state_folder(self):
+        self.ok(self.install("--user-level"))
+        p = self.ok(self.install("--uninstall"))
+        self.assertNotIn("backed up", p.stdout)
+        self.assertFalse(self.state().exists(), p.stdout + p.stderr)
+
+    def test_state_folder_with_backups_stays(self):
+        self.claude_dir.mkdir()
+        (self.claude_dir / "settings.json").write_text('{"theme": "dark"}')
+        self.ok(self.install("--user-level", "--claude-only"))
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertFalse(self.record.exists())
+        self.assertTrue(any((self.state() / "backups").rglob("settings.json")))
+
     def test_record_item_missing_field(self):
         self.ok(self.install("--user-level", "--claude-only"))
         rec = json.loads(self.record.read_text())

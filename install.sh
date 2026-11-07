@@ -853,11 +853,12 @@ def cmd_uninstall_recorded(*scope):
         if DRY:
             say("  [dry-run] remove our hook entries from %s" % path)
             continue
-        backup(path)
         if drop_file:
+            # Created by this script and holding nothing else: no backup, its content was entirely ours.
             os.unlink(path)
             say("  removed our hook entries from %s (the file was created by this script: removed)" % path)
         else:
+            backup(path)
             write_hooks_file(path, data, fmt)
             say("  removed our hook entries from %s" % path)
     changed |= sweep(rec, scope, recorded)
@@ -1292,13 +1293,18 @@ legacy_anything() {
 
 # --- lock ------------------------------------------------------------------------------------------------------
 # One run at a time per state folder: mkdir is atomic. The lock holds the pid; a lock whose process is gone is stale
-# and is taken over. Folders created only to hold the lock are removed again on exit when still empty.
+# and is taken over. Folders created only to hold the lock are removed again on exit when still empty. After an
+# uninstall that removed the record, the state folder goes too when it is empty (no backups); otherwise it stays.
 LOCK_HELD=0
 LOCK_MADE=()
 release_lock() {
   [ "$LOCK_HELD" = 1 ] && rm -rf "$LOCK"
+  if [ "$LOCK_HELD" = 1 ] && [ "$MODE" = "uninstall" ] && ! exists "$RECORD"; then rmdir "$STATE_DIR" 2>/dev/null || true; fi
   local i
-  for ((i = ${#LOCK_MADE[@]} - 1; i >= 0; i--)); do rmdir "${LOCK_MADE[$i]}" 2>/dev/null || break; done
+  for ((i = ${#LOCK_MADE[@]} - 1; i >= 0; i--)); do
+    [ -d "${LOCK_MADE[$i]}" ] || continue
+    rmdir "${LOCK_MADE[$i]}" 2>/dev/null || break
+  done
   return 0
 }
 take_lock() {

@@ -31,7 +31,13 @@ The full rule book is `skills/orchestration/SKILL.md`; the reasons behind the ru
 
 Pick one mode. Do not install both the plugin and the user-level copy: the skill and hooks would load twice. `install.sh` refuses to do that.
 
-What was measured: the local-clone path (`install.sh` in plugin and user-level mode, install and uninstall) in a temporary home inside a macOS sandbox without network. The GitHub source commands below (`0xRorschach/...`) were not measured.
+What was measured: the local-clone path (`install.sh` in plugin and user-level mode, install and uninstall) in a temporary home inside a macOS sandbox without network. The GitHub source commands below (`0xRorschach/...`) were measured 2026-11-07 against the public repository with Claude Code 2.1.319 and Codex CLI 0.166.0, in a temporary home without credentials: marketplace add, install, details, update (already-latest case), uninstall; and clone + ./install.sh + --uninstall.
+
+Not measured:
+
+- an update across a real version change;
+- Codex hooks firing in a live session after they are trusted with `/hooks`;
+- the live behaviour of the hooks in a Claude Code session.
 
 ### Claude Code (native plugin)
 
@@ -90,6 +96,28 @@ Exit codes:
 | `2` | Usage error (unknown option, or `--claude-only` with `--codex-only`). |
 | `3` | Would install twice (plugin and user-level copy together), or a path this script did not install is in the way: the message names the path and says to run `./install.sh --uninstall` or to move it away (`not installed by this script; move it away`). |
 
+### Removing
+
+Remove in the order shown.
+
+Plugin installed from the marketplace, Claude Code:
+
+```sh
+claude plugin uninstall orchestration@claude-codex-orchestration
+claude plugin marketplace remove claude-codex-orchestration
+```
+
+Codex:
+
+```sh
+codex plugin remove orchestration@claude-codex-orchestration
+codex plugin marketplace remove claude-codex-orchestration
+```
+
+Then delete the copied roles `~/.codex/agents/{explorer,researcher,scanner,worker}.toml`, only if you copied them from this repository.
+
+Installed with `install.sh`: `./install.sh --uninstall` is enough.
+
 ### Install record and uninstall
 
 Every install writes `${XDG_STATE_HOME:-~/.local/state}/claude-codex-orchestration/install-record.json` (mode 0600). It lists the mode and tools, every file and folder the script created with its sha256, the skill copy (with a checksum of the whole folder and which tools use it), the Claude skills link, each hook entry it added to `settings.json` / `hooks.json` (the whole entry), the plugins and marketplaces it registered, and for every file it replaced the backup: path, original type, mode and, for a symlink, the link target. Backups go to `backups/<date>-<time>-<microseconds>-<pid>/<original absolute path>` next to the record (folder mode 0700). Each item is recorded as pending before it is written and confirmed after, so a run that stops half way still leaves a record that `--uninstall` can act on. While a run is active it holds a lock folder, `install.lock`, in the same place; a lock left by a process that no longer runs, or one without a pid that is older than 10 minutes, is taken over; otherwise the message names the lock to remove if no `install.sh` is running. Concurrent runs are refused; a takeover race between two runs that both find the same stale lock is not guarded.
@@ -101,7 +129,7 @@ Every install writes `${XDG_STATE_HOME:-~/.local/state}/claude-codex-orchestrati
 - Only the hook entries the install added are taken out; an identical entry that was already there before the install stays, and so does a file that was already identical to ours.
 - A pending item (from a run that stopped half way) is removed only if it holds exactly our content; otherwise it is the original and stays.
 - Leftovers the record does not list (from such a run, or from an older install) are removed with a warning, for the tools this record installed, when they are exactly ours: files byte-identical to this repository's copies, and hook entries whose command is one of this repository's hook commands.
-- Folders the install created are removed when empty. When nothing is left, the record itself is removed.
+- Folders the install created are removed when empty. When nothing is left, the record itself is removed, and then the state folder `${XDG_STATE_HOME:-~/.local/state}/claude-codex-orchestration/` too if it is empty (after the lock is released); a state folder that still holds backups stays. A `settings.json` / `hooks.json` the install created and that holds nothing but our entries is removed without a backup; a file that holds anything else is backed up before it is rewritten.
 - `--claude-only` / `--codex-only` limit the uninstall to one tool. The shared skill copy in `~/.agents/skills/orchestration` goes when the last tool that uses it is uninstalled.
 - An existing symlink at a copied file (say `~/.codex/agents/worker.toml` pointing into a dotfiles folder) is replaced by the file itself; the file it pointed to is never written. A symlinked `settings.json` / `hooks.json` is written through, so the link stays. Rewritten JSON files keep their mode, their indent (2 when it cannot be read from the file) and their final newline, and non-ASCII text stays as it is; a `"hooks": {}` or event list that was there before the install stays after uninstall, while the ones the install created go.
 
@@ -115,7 +143,7 @@ After a plugin-mode uninstall, Claude Code and Codex keep their own bookkeeping 
 
 Depends on how you installed:
 
-- **From GitHub as a marketplace** (not measured): Claude Code: `claude plugin marketplace update claude-codex-orchestration`, then `claude plugin update orchestration@claude-codex-orchestration` and restart the session. Codex: `codex plugin marketplace upgrade claude-codex-orchestration`, then `codex plugin add orchestration@claude-codex-orchestration` again. Copy the roles again if they changed.
+- **From GitHub as a marketplace** (measured 2026-11-07 only in the already-latest case; an update across a real version change is not measured): Claude Code: `claude plugin marketplace update claude-codex-orchestration`, then `claude plugin update orchestration@claude-codex-orchestration` and restart the session. Codex: `codex plugin marketplace upgrade claude-codex-orchestration`, then `codex plugin add orchestration@claude-codex-orchestration` again. Copy the roles again if they changed.
 - **From a local clone with `install.sh`:** `git pull`. Claude Code reads the plugin from the clone in place (restart the session). Codex keeps a cached copy: run `codex plugin add orchestration@claude-codex-orchestration` again. In `--user-level` mode run `./install.sh --user-level` again.
 
 In both cases approve changed hooks in Codex with `/hooks`.
@@ -176,7 +204,7 @@ File and environment variable names are Turkish in origin and kept on purpose: r
 - The agent-type gate denies `Plan` and `Explore` in every session. Built-in Claude Code flows that open such an agent themselves (plan mode, for example) may be blocked as well (not verified). Turn the gate off with `ORCH_TIP_KAPISI=0`.
 - The advisor tool is optional and exists only on the Claude side.
 - Load reminder: in Claude Code the note arrives with the first Agent call's result, so it shapes the later spawns, not the first one. In Codex it runs only after you trust it with `/hooks`.
-- Codex plugin hook loading via `${PLUGIN_ROOT}` not measured in a live session.
+- Codex plugin hook loading via `${PLUGIN_ROOT}` not measured in a live session: whether Codex hooks fire in a live session after they are trusted with `/hooks` is not measured, nor is the live behaviour of the hooks in a Claude Code session.
 
 ## Tests
 
