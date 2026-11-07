@@ -14,6 +14,10 @@ Second opinion):
   not overwritten and a warning is returned. Comparison and write run under fcntl.flock on `auth.json.lock`: two
   concurrent calls cannot both see the same old sha and both write. The lock file is permanent (deleting it does not
   break the lock, it is simply recreated). Adapted from an earlier internal project (which used a link, not a copy).
+  Limit: the lock only coordinates this script's own calls; the Codex CLI itself does not take it. If another Codex
+  session with the same account runs during a call, a refreshed token can be overwritten or not written back (there
+  is an unlocked window between comparison and write). Do not keep another Codex session open during a critic call;
+  if a credential error follows, run `codex login`.
 - Credential error detection ("refresh token was already used"): searched only in stderr and in the error events of
   the event stream (top-level `type` error or turn.failed, or `item.type` error). Model messages (agent_message) and
   command output (command_execution) are not scanned: when the critic reviewed this script and quoted the pattern, a

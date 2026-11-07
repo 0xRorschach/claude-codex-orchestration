@@ -72,7 +72,10 @@ is for reaching Codex's image tool from Claude.
   configuration, hooks and memory do not leak in. If Codex refreshes the token during the call, the new copy is
   written to the real file atomically; if the real file changed in another process meanwhile, it is not overwritten
   and a warning is given. Comparison and write run under the `auth.json.lock` lock; this lock file stays in the
-  Codex home permanently. A "refresh token was already used" error returns exit 77 and is not retried: `codex login`
+  Codex home permanently. The lock only coordinates this script's own calls: the Codex CLI itself does not take it.
+  If another Codex session with the same account runs during a critic call, a refreshed token can be overwritten,
+  or not written back, because there is an unlocked window between the comparison and the write. Advice: do not
+  keep another Codex session open while a critic call runs; if a credential error follows, run `codex login`. A "refresh token was already used" error returns exit 77 and is not retried: `codex login`
   is needed. This error is searched only in stderr and in the event stream's error events (`error`, `turn.failed`,
   an error item); appearing in a model message or in command output does not return 77.
 - **Environment (Claude):** allow list. Passed: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, `LANG`, `LC_*`,

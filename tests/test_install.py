@@ -7,9 +7,11 @@ temporary bin folder holding only the tools a test wants, so "only Claude" or "o
 The real claude / codex binaries are used when they are on PATH; tests that need one are skipped otherwise.
 Run from the repo root: python3 -m unittest discover -s tests -v
 """
+import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -31,6 +33,17 @@ CODEX_OK = bool(CODEX and NODE)
 need_claude = unittest.skipUnless(CLAUDE, "claude not on PATH")
 need_codex = unittest.skipUnless(CODEX_OK, "codex (and node) not on PATH")
 need_both = unittest.skipUnless(CLAUDE and CODEX_OK, "claude and codex both needed")
+
+
+def snapshot_without_state(root):
+    """snapshot() minus ~/.local (the install record and backups live under .local/state)."""
+    return {k: v for k, v in snapshot(root).items() if k != ".local" and not k.startswith(".local" + os.sep)}
+
+
+def fragment_group(name, event, script):
+    """The group of a hook fragment whose command runs script."""
+    frag = json.loads((REPO / "skills/orchestration/hooks" / name).read_text())
+    return next(g for g in frag["hooks"][event] if script in g["hooks"][0]["command"])
 
 
 def snapshot(root):
@@ -96,6 +109,18 @@ class Base(unittest.TestCase):
         env.update(env_ek or {})
         return subprocess.run(cmd, capture_output=True, text=True, env=env, input=stdin,
                               cwd=str(cwd or self.home), timeout=300)
+
+    def fake_tool(self, name, code=0):
+        """An executable stand-in for claude/codex that exits with code (user-level mode never calls the tools)."""
+        p = self.bin / name
+        if p.exists() or p.is_symlink():
+            p.unlink()
+        p.write_text("#!/bin/sh\necho \"fake %s $*\"\nexit %d\n" % (name, code))
+        p.chmod(0o755)
+
+    @property
+    def record(self):
+        return self.home / ".local/state/claude-codex-orchestration/install-record.json"
 
     def install(self, *flags):
         return self.sh("bash", str(INSTALL), *flags)
@@ -180,7 +205,7 @@ class TestPluginMode(Base):
         role.write_text(role.read_text() + "\n# local edit\n")
         p = self.ok(self.install("--uninstall", "--codex-only"))
         self.assertTrue(role.exists())
-        self.assertIn("differs", p.stderr)
+        self.assertIn("worker.toml was changed after install: left in place", p.stderr)
 
     @need_codex
     def test_existing_role_is_backed_up(self):
@@ -394,6 +419,273 @@ class TestNoTools(Base):
 
     def test_unknown_option(self):
         self.assertEqual(self.install("--force").returncode, 2)
+
+class FakeTools(Base):
+    """User-level installs and uninstalls never call claude/codex, so stand-ins are enough and these tests always run."""
+    tools = ()
+
+    def setUp(self):
+        super().setUp()
+        self.fake_tool("claude")
+        self.fake_tool("codex")
+
+
+class TestSymlinkedTargets(FakeTools):
+    """Finding A: an existing target that is a symlink must be replaced by a file, never written through."""
+
+    def link_case(self, dest, relative, flags):
+        outside = self.home / "dotfiles"
+        outside.mkdir()
+        mine = outside / dest.name
+        mine.write_text("mine\n")
+        dest.parent.mkdir(parents=True)
+        target = os.path.relpath(mine, dest.parent) if relative else str(mine)
+        os.symlink(target, dest)
+        p = self.ok(self.install("--user-level", *flags))
+        self.assertEqual(mine.read_text(), "mine\n", "the file behind the link was written through")
+        self.assertFalse(dest.is_symlink())
+        self.assertIn("symlink to %s" % target, p.stdout)
+        rec = json.loads(self.record.read_text())
+        item = next(i for i in rec["items"] if i.get("path") == str(dest))
+        self.assertEqual((item["backup"]["type"], item["backup"]["link_target"]), ("symlink", target))
+        self.assertEqual(Path(item["backup"]["path"]).read_text(), "mine\n")
+        self.ok(self.install("--uninstall", *flags))
+        self.assertTrue(dest.is_symlink())
+        self.assertEqual(os.readlink(dest), target)
+        self.assertEqual(mine.read_text(), "mine\n")
+
+    def test_codex_role_absolute_link(self):
+        self.link_case(self.codex_dir / "agents" / "worker.toml", False, ("--codex-only",))
+
+    def test_codex_role_relative_link(self):
+        self.link_case(self.codex_dir / "agents" / "worker.toml", True, ("--codex-only",))
+
+    def test_claude_agent_absolute_link(self):
+        self.link_case(self.claude_dir / "agents" / "worker.md", False, ("--claude-only",))
+
+    def test_claude_agent_relative_link(self):
+        self.link_case(self.claude_dir / "agents" / "worker.md", True, ("--claude-only",))
+
+
+class TestRecord(FakeTools):
+    """Finding B: uninstall removes only what the install added, and puts back what it replaced."""
+
+    def test_record_lists_what_was_added(self):
+        self.ok(self.install("--user-level"))
+        self.assertEqual(stat.S_IMODE(self.record.stat().st_mode), 0o600)
+        rec = json.loads(self.record.read_text())
+        self.assertEqual((rec["version"], rec["modes"], sorted(rec["tools"])), (1, ["user"], ["claude", "codex"]))
+        kinds = {}
+        for i in rec["items"]:
+            kinds[i["kind"]] = kinds.get(i["kind"], 0) + 1
+        self.assertEqual((kinds["file"], kinds["tree"], kinds["link"], kinds["json"]), (8, 1, 1, 8))
+        worker = self.claude_dir / "agents" / "worker.md"
+        item = next(i for i in rec["items"] if i.get("path") == str(worker))
+        self.assertEqual(item["sha256"], hashlib.sha256(worker.read_bytes()).hexdigest())
+        self.assertIsNone(item["backup"])
+        tree = next(i for i in rec["items"] if i["kind"] == "tree")
+        self.assertEqual(sorted(tree["users"]), ["claude", "codex"])
+
+    def test_preexisting_hook_entry_survives(self):
+        group = fragment_group("settings-parcasi.json", "PreToolUse", "agent-tip-kapisi.py")
+        self.claude_dir.mkdir()
+        settings = {"hooks": {"PreToolUse": [group]}}
+        (self.claude_dir / "settings.json").write_text(json.dumps(settings))
+        self.ok(self.install("--user-level", "--claude-only"))
+        merged = json.loads((self.claude_dir / "settings.json").read_text())
+        self.assertEqual(len(self.our_hook_commands(self.claude_dir / "settings.json")), 5)
+        self.assertEqual(merged["hooks"]["PreToolUse"].count(group), 1)
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertEqual(json.loads((self.claude_dir / "settings.json").read_text()), settings)
+
+    def test_overwritten_user_file_comes_back(self):
+        agents = self.claude_dir / "agents"
+        agents.mkdir(parents=True)
+        (agents / "worker.md").write_text("my worker\n")
+        (agents / "worker.md").chmod(0o640)
+        self.ok(self.install("--user-level", "--claude-only"))
+        self.assertNotEqual((agents / "worker.md").read_text(), "my worker\n")
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertEqual((agents / "worker.md").read_text(), "my worker\n")
+        self.assertEqual(stat.S_IMODE((agents / "worker.md").stat().st_mode), 0o640)
+        self.assertEqual(sorted(p.name for p in agents.iterdir()), ["worker.md"])
+
+    def test_file_changed_after_install_is_kept(self):
+        self.ok(self.install("--user-level", "--claude-only"))
+        explorer = self.claude_dir / "agents" / "explorer.md"
+        explorer.write_text(explorer.read_text() + "\nmy note\n")
+        p = self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertIn("explorer.md was changed after install: left in place", p.stderr)
+        self.assertTrue(explorer.read_text().endswith("my note\n"))
+        self.assertFalse((self.claude_dir / "agents" / "worker.md").exists())
+        self.assertFalse(self.record.exists(), "nothing of ours is left, so the record goes")
+
+    def test_skill_copy_changed_after_install_is_kept(self):
+        self.ok(self.install("--user-level"))
+        (self.skill / "SKILL.md").write_text("edited\n")
+        p = self.ok(self.install("--uninstall"))
+        self.assertIn("%s was changed after install: left in place" % self.skill, p.stderr)
+        self.assertEqual((self.skill / "SKILL.md").read_text(), "edited\n")
+
+    def test_full_cycle_leaves_home_as_it_was(self):
+        before = snapshot_without_state(self.home)
+        self.ok(self.install("--user-level"))
+        self.ok(self.install("--uninstall"))
+        self.assertEqual(snapshot_without_state(self.home), before)
+        self.assertFalse(self.record.exists())
+
+    def test_legacy_install_without_record(self):
+        # An install by an older version of this script: same files, no record.
+        self.ok(self.install("--user-level"))
+        self.record.unlink()
+        settings = self.claude_dir / "settings.json"
+        data = json.loads(settings.read_text())
+        data["hooks"]["SessionStart"].append({"hooks": [{"type": "command",
+                                                         "command": "python3 /x/%sother.py" % MARK}]})
+        settings.write_text(json.dumps(data))
+        (self.codex_dir / "agents" / "worker.toml").write_text("mine\n")
+        p = self.install("--user-level")
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("%s exists but is not in this script's install record" % self.skill, p.stderr)
+        self.assertIn("./install.sh --uninstall", p.stderr)
+        p = self.ok(self.install("--uninstall"))
+        self.assertIn("no install record", p.stderr)
+        self.assertIn("worker.toml differs from this repo's copy: left in place", p.stderr)
+        self.assertEqual((self.codex_dir / "agents" / "worker.toml").read_text(), "mine\n")
+        self.assertEqual(self.our_hook_commands(settings), ["python3 /x/%sother.py" % MARK])
+        self.assertEqual(self.our_hook_commands(self.codex_dir / "hooks.json"), [])
+        self.assertFalse(self.skill.exists())
+
+    def test_legacy_changed_skill_keeps_its_link(self):
+        self.ok(self.install("--user-level", "--claude-only"))
+        self.record.unlink()
+        (self.skill / "SKILL.md").write_text("edited\n")
+        p = self.ok(self.install("--uninstall"))
+        self.assertIn("differs from this repo's skill", p.stderr)
+        link = self.claude_dir / "skills" / "orchestration"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual((link / "SKILL.md").read_text(), "edited\n")
+
+
+class TestPermissions(FakeTools):
+    """Finding C: rewriting settings.json / hooks.json keeps their mode."""
+
+    def test_private_config_stays_private(self):
+        self.claude_dir.mkdir()
+        self.codex_dir.mkdir()
+        files = [(self.claude_dir / "settings.json", {"theme": "dark"}), (self.codex_dir / "hooks.json", {})]
+        for f, data in files:
+            f.write_text(json.dumps(data))
+            f.chmod(0o600)
+        self.ok(self.install("--user-level"))
+        for f, _ in files:
+            self.assertEqual(stat.S_IMODE(f.stat().st_mode), 0o600, f)
+        self.ok(self.install("--uninstall"))
+        for f, data in files:
+            self.assertEqual(stat.S_IMODE(f.stat().st_mode), 0o600, f)
+            self.assertEqual(json.loads(f.read_text()), data)
+        self.assertEqual(list(self.home.glob(".*/.*.json.*")), [], "a temporary file was left behind")
+
+
+class TestUnreadableJson(FakeTools):
+    """Finding D: a file that does not parse stops the run before anything is written."""
+
+    def check_refused(self, flags, path):
+        before = snapshot(self.home)
+        p = self.install(*flags)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("error: cannot parse %s: " % path, p.stderr)
+        self.assertIn("; fix or move it and rerun", p.stderr)
+        self.assertNotIn("Traceback", p.stderr)
+        self.assertNotIn("merged", p.stdout)
+        self.assertEqual(snapshot(self.home), before)
+
+    def test_commented_settings_on_install(self):
+        self.claude_dir.mkdir()
+        (self.claude_dir / "settings.json").write_text('// my settings\n{"theme": "dark"}\n')
+        self.check_refused(("--user-level",), self.claude_dir / "settings.json")
+
+    def test_broken_codex_hooks_on_install(self):
+        self.codex_dir.mkdir()
+        (self.codex_dir / "hooks.json").write_text('{"hooks": [1, 2]}\n')
+        self.check_refused(("--user-level",), self.codex_dir / "hooks.json")
+
+    def test_broken_settings_on_uninstall(self):
+        self.ok(self.install("--user-level"))
+        (self.claude_dir / "settings.json").write_text("{not json\n")
+        self.check_refused(("--uninstall",), self.claude_dir / "settings.json")
+
+    def test_broken_settings_on_legacy_uninstall(self):
+        self.ok(self.install("--user-level"))
+        self.record.unlink()
+        (self.claude_dir / "settings.json").write_text("{not json\n")
+        self.check_refused(("--uninstall",), self.claude_dir / "settings.json")
+
+    def test_broken_record(self):
+        self.ok(self.install("--user-level"))
+        self.record.write_text("[]\n")
+        self.check_refused(("--uninstall",), self.record)
+
+
+class TestClaudeOnlyCycle(FakeTools):
+    """Finding E: --claude-only install and uninstall leave nothing behind and can be repeated."""
+
+    def test_cycle(self):
+        before = snapshot_without_state(self.home)
+        for _ in range(2):
+            self.ok(self.install("--user-level", "--claude-only"))
+            self.assertTrue((self.skill / "SKILL.md").is_file())
+            self.ok(self.install("--uninstall", "--claude-only"))
+            self.assertFalse(self.skill.exists())
+            self.assertEqual(snapshot_without_state(self.home), before)
+        self.assertIn("Nothing to uninstall.", self.ok(self.install("--uninstall")).stdout)
+
+    def test_codex_keeps_shared_copy(self):
+        self.ok(self.install("--user-level"))
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertTrue((self.skill / "SKILL.md").is_file())
+        self.assertFalse((self.claude_dir / "skills" / "orchestration").is_symlink())
+        self.assertEqual(len(self.our_hook_commands(self.codex_dir / "hooks.json")), 3)
+        self.ok(self.install("--uninstall", "--codex-only"))
+        self.assertFalse(self.skill.exists())
+        self.assertFalse(self.record.exists())
+
+    def test_foreign_claude_skill_blocks_plugin(self):
+        link = self.claude_dir / "skills" / "orchestration"
+        link.mkdir(parents=True)
+        (link / "SKILL.md").write_text("someone else's\n")
+        p = self.install("--claude-only")
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("%s: not installed by this script; move it away" % link, p.stderr)
+
+    def test_user_level_replaces_and_restores_foreign_claude_skill(self):
+        link = self.claude_dir / "skills" / "orchestration"
+        link.mkdir(parents=True)
+        (link / "SKILL.md").write_text("someone else's\n")
+        self.ok(self.install("--user-level", "--claude-only"))
+        self.assertTrue(link.is_symlink())
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertFalse(link.is_symlink())
+        self.assertEqual((link / "SKILL.md").read_text(), "someone else's\n")
+
+
+class TestToolFailure(Base):
+    """Finding H: a failing claude/codex command stops the script with its own message and exit 1."""
+    tools = ()
+
+    def test_claude_failure(self):
+        self.fake_tool("claude", 5)
+        p = self.install("--claude-only")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("error: claude plugin marketplace add failed (exit 5)", p.stderr)
+        self.assertFalse(self.record.exists())
+
+    def test_codex_failure(self):
+        self.fake_tool("codex", 7)
+        p = self.install("--codex-only")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("error: codex plugin marketplace add failed (exit 7)", p.stderr)
+        self.assertEqual(self.codex_roles(), [], "nothing is copied after a failed tool command")
 
 
 if __name__ == "__main__":

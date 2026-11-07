@@ -80,7 +80,7 @@ skill was not loaded in this session, this note is added once per session:
 
 > The orchestration skill was not loaded in this session. Load it before opening subagents (Skill: orchestration); the way of working is defined there.
 
-The call is never blocked. Why: in a measurement of 152 sessions (2026-11-08) the skill was never loaded in 44.1% of
+The call is never blocked. Why: in a measurement of 152 sessions (2026-11-07) the skill was never loaded in 44.1% of
 sessions; in every session where it loaded on its own, it loaded before the first subagent.
 
 - Traces counted as loaded, in the raw text of a transcript (`transcript_path`) line: in Claude Code a Skill tool
@@ -110,7 +110,9 @@ sessions; in every session where it loaded on its own, it loaded before the firs
 
 Enforces the agent type and model tree on every `Agent`/`Task` call, including calls made from inside a subagent:
 
-- A `model` parameter other than `opus` is denied: the subagent's model must come from its agent file.
+- A `model` parameter is denied unless it is `opus` or a full Opus id starting with `claude-opus-` (for example
+  `claude-opus-4-1`; case-insensitive): the subagent's model must come from its agent file. `claude-opus` without a
+  version, `sonnet`, `haiku` and any other value are denied.
 - The general-purpose types `general-purpose`, `Explore`, `Plan`, `claude`, `fork` and an empty type (which means
   `general-purpose`) are denied (case-insensitive): they inherit the main session's effort or ignore the model
   setting. The denial message suggests `tarayici`, `explorer`, `worker` or `researcher`.
@@ -119,6 +121,8 @@ Enforces the agent type and model tree on every `Agent`/`Task` call, including c
 - Every other type passes, including plugin agents and narrow built-ins such as `claude-code-guide`.
 - The denial message quotes the rule book path: `${CLAUDE_PLUGIN_ROOT}/skills/orchestration/SKILL.md` in plugin
   mode, otherwise `SKILL.md` one folder above this script.
+- Every denial message ends with how to turn the gate off (`ORCH_TIP_KAPISI=0`).
+- Off switch: `ORCH_TIP_KAPISI=0` lets every call pass and logs nothing.
 - Denials are logged as one JSON line (without the prompt) to `ret.jsonl` in `$ORCH_LOG_DIR`, else
   `$CLAUDE_PLUGIN_DATA` / `$PLUGIN_DATA`, else `~/.local/share/agent-tip-kapisi/`. A log write failure never changes
   the decision.
@@ -129,6 +133,7 @@ After the main session starts a subagent, adds a reminder to start any independe
 separate subagents, or to state in one sentence why there is none. Silent inside subagents (input carries
 `agent_id`). Never blocks.
 
+- Off switch: `ORCH_PARALEL_HATIRLATICI=0` (no reminder, no log line).
 - Threshold quoted in the reminder: `ORCH_PARALEL_ESIK` (concurrent agents, default 15; an invalid or non-positive
   value falls back to 15).
 - Each trigger writes one tab-separated line (time, session id, tool) to `paralel-is-hatirlatici.log` in
@@ -163,8 +168,13 @@ Without removing the registration, via environment variables:
 - `ORCH_OKUMA_BUTCESI=0`: the read budget hook does nothing.
 - `ORCH_SURUM_BEKCISI=0`: the version watcher does nothing.
 - `ORCH_HATIRLATICI=0`: the orchestration load reminder does nothing.
+- `ORCH_TIP_KAPISI=0`: the subagent type gate lets every call pass.
+- `ORCH_PARALEL_HATIRLATICI=0`: the parallel-work reminder does nothing.
 
-For permanent removal, take the entry out of `settings.json` or `hooks.json`.
+Set them in the environment the tool starts in (for example your shell profile). This works the same in every install mode. In plugin mode the hook entries live in the plugin's
+own `hooks/hooks.json`, not in your `settings.json` / `hooks.json`, so the environment switch is the way to turn one
+hook off; to remove all of them, uninstall the plugin (`./install.sh --uninstall`). After a user-level install,
+`./install.sh --uninstall` removes the entries it added; editing `settings.json` / `hooks.json` by hand also works.
 
 ## Environment variables
 
@@ -175,6 +185,8 @@ For permanent removal, take the entry out of `settings.json` or `hooks.json`.
 | `ORCH_MUAF_BETIKLER` | Extra exempt script file names for the read budget, comma-separated. |
 | `ORCH_SURUM_BEKCISI` | `0` disables the version watcher. |
 | `ORCH_HATIRLATICI` | `0` disables the orchestration load reminder. |
+| `ORCH_TIP_KAPISI` | `0` disables the subagent type gate (every call passes, nothing is logged). |
+| `ORCH_PARALEL_HATIRLATICI` | `0` disables the parallel-work reminder. |
 | `ORCH_PLUGINS_DIR`, `ORCH_SURUM_TABLOSU` | Override the plugin folder and the version table path (tests, other layouts). |
 | `ORCH_PARALEL_ESIK` | Concurrent-agent threshold quoted by the parallel-work reminder (default 15). |
 | `ORCH_LOG_DIR` | Folder for the type gate and parallel-work reminder logs and the load reminder state (wins over the plugin data folder). |

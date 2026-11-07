@@ -25,10 +25,11 @@ Each entry: **default** · what it means · how to change it.
    session total. The reminder hook quotes the number from `ORCH_PARALEL_ESIK` (default 15).
    Change: "Concurrency threshold: 8." and set `ORCH_PARALEL_ESIK=8` in the hook's environment.
 
-4. **Main session commits without asking.**
-   Default: the main session may commit finished work in project repos without asking (workers commit on their own
+4. **Ask before committing.**
+   Default: the main session asks before it commits finished work in project repos (workers commit on their own
    worktree/feature branch; merge to main and push stay gated).
-   Change: "Ask before every commit." or "Commit only when I say commit."
+   Change: "Main session commits without asking." (standing permission to commit finished work) or "Commit only
+   when I say commit."
 
 5. **Workflow (multi-agent script) is a separate permission.**
    Default: no Workflow runs unless you approve it that time.
@@ -70,7 +71,7 @@ Each entry: **default** · what it means · how to change it.
 - Lower model tier: only when I say so.
 - Delegation: standing permission.
 - Concurrency threshold: 15 agents at once (ORCH_PARALEL_ESIK=15).
-- Main session commits: without asking.
+- Main session commits: ask before committing.
 - Workflow: ask each time; you may propose it.
 - Images: Astra for important/outward-facing, Sol for routine.
 - Worktree archive: ~/Projects/_archive

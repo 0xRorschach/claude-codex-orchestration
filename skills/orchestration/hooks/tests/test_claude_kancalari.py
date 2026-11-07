@@ -89,6 +89,36 @@ class AgentTipKapisi(TempOrtam):
     def test_opus_modeli_gecer(self):
         self.assertEqual(self.k(agent_girdisi("worker", model="opus")).stdout, "")
 
+    def test_tam_opus_kimligi_gecer(self):
+        for model in ("claude-opus-4-1", "Claude-Opus-5-5", " claude-opus-4-1-20250805 "):
+            with self.subTest(model=model):
+                self.assertEqual(self.k(agent_girdisi("worker", model=model)).stdout, "")
+
+    def test_opus_benzeri_ama_tam_kimlik_olmayan_reddedilir(self):
+        for model in ("claude-opus", "claude-sonnet-4-5", "opus-mini", "claude-haiku-4-5", "anthropic/claude-opus-4"):
+            with self.subTest(model=model):
+                c = self.karar(self.k(agent_girdisi("worker", model=model)))
+                self.assertEqual(c["permissionDecision"], "deny")
+
+    def test_ret_mesaji_kapatmayi_soyler(self):
+        for girdi in (agent_girdisi("general-purpose"), agent_girdisi("worker", model="sonnet")):
+            with self.subTest(girdi=girdi["tool_input"]):
+                neden = self.karar(self.k(girdi))["permissionDecisionReason"]
+                self.assertTrue(neden.endswith("set ORCH_TIP_KAPISI=0 in the environment Claude Code runs in."), neden)
+
+    def test_kapatma_anahtari(self):
+        env = dict(self.env, ORCH_TIP_KAPISI="0")
+        for girdi in (agent_girdisi("general-purpose"), agent_girdisi("worker", model="haiku"), agent_girdisi()):
+            with self.subTest(girdi=girdi["tool_input"]):
+                p = kos(KAPI, girdi, env)
+                self.assertEqual((p.returncode, p.stdout), (0, ""), p.stderr)
+        self.assertFalse(self.log_dizini.exists(), "a disabled gate must not log")
+        # any other value keeps the gate on
+        for deger in ("1", "", "no"):
+            with self.subTest(deger=deger):
+                c = self.karar(kos(KAPI, agent_girdisi("fork"), dict(self.env, ORCH_TIP_KAPISI=deger)))
+                self.assertEqual(c["permissionDecision"], "deny")
+
     def test_eklenti_ajan_tipleri_gecer(self):
         # plugin and narrow-purpose agent types are deliberately left alone
         for tip in ("claude-code-guide", "statusline-setup", "someplugin:reviewer"):
@@ -201,6 +231,12 @@ class ParalelIsHatirlatici(TempOrtam):
         # ORCH_LOG_DIR wins over the plugin data folder
         self.k(self.girdi(), dict(self.env, CLAUDE_PLUGIN_DATA=str(veri)))
         self.assertTrue((self.log_dizini / "paralel-is-hatirlatici.log").is_file())
+
+    def test_kapatma_anahtari(self):
+        p = self.k(self.girdi(), dict(self.env, ORCH_PARALEL_HATIRLATICI="0"))
+        self.assertEqual(p.stdout, "")
+        self.assertFalse(self.log_dizini.exists(), "a disabled reminder must not log")
+        self.assertIn("[parallel-work hook]", baglam(self.k(self.girdi(), dict(self.env, ORCH_PARALEL_HATIRLATICI="1"))))
 
     def test_bozuk_stdin_sessiz(self):
         p = kos(HATIRLATICI, None, self.env, ham_girdi="")

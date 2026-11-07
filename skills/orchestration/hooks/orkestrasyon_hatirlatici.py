@@ -2,7 +2,7 @@
 """PreToolUse hook (Claude Code: Agent|Task, Codex: spawn_agent): when the main session opens its first subagent and
 the orchestration skill was not loaded in this session, it reminds once. It does not block; it only adds context.
 
-Why: in a measurement (n=152 sessions, 2026-11-08) the skill loaded on its own in 44.7% of sessions, on a user
+Why: in a measurement (n=152 sessions, 2026-11-07) the skill loaded on its own in 44.7% of sessions, on a user
 trigger in 11.2%, and never in 44.1%; every self-loaded session loaded it before the first subagent. The way of
 working is defined in the skill; opening a subagent is the latest point to remind if it was not loaded.
 

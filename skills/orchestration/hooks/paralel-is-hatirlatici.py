@@ -8,9 +8,10 @@ exactly at that moment. It does not block; it only adds context.
 It stays silent in helpers opened from inside a subagent (input carries agent_id). Each trigger writes one log line
 (for measurement).
 
-Environment variables: ORCH_PARALEL_ESIK sets the concurrent-agent threshold quoted in the reminder (default 15;
-an invalid or non-positive value falls back to 15). The log goes to ORCH_LOG_DIR, otherwise CLAUDE_PLUGIN_DATA or
-PLUGIN_DATA (plugin mode), otherwise ~/.claude/hooks/.
+Environment variables: ORCH_PARALEL_HATIRLATICI=0 turns the reminder off (no output, no log line).
+ORCH_PARALEL_ESIK sets the concurrent-agent threshold quoted in the reminder (default 15; an invalid or non-positive
+value falls back to 15). The log goes to ORCH_LOG_DIR, otherwise CLAUDE_PLUGIN_DATA or PLUGIN_DATA (plugin mode),
+otherwise ~/.claude/hooks/.
 """
 import json
 import os
@@ -44,6 +45,8 @@ def log_yolu():
 
 
 def main() -> int:
+    if os.environ.get("ORCH_PARALEL_HATIRLATICI", "1").strip() == "0":
+        return 0
     try:
         veri = json.load(sys.stdin)
     except Exception:

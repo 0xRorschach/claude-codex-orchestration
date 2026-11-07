@@ -6,7 +6,7 @@ general-purpose types carry no effort and inherit the main session's high effort
 high, explorer -> medium]. Superpowers templates write `general-purpose`, so the rule cannot be kept by text alone;
 this gate enforces it.
 
-Rules: (1) a `model` parameter is given and it is not `opus` -> deny; (2) a forbidden type (the set below, or an
+Rules: (1) a `model` parameter is given and it is neither `opus` nor a full Opus id (`claude-opus-...`) -> deny; (2) a forbidden type (the set below, or an
 empty type = general-purpose) -> deny. A plugin-qualified type `<plugin>:<agent>` is checked by its last part.
 The hook also runs inside subagents [docs: code.claude.com/docs sub-agents], so an agent opened by a subagent is
 subject to the same type rule. Nesting agents itself is allowed; the first version's agent_id denial was removed for
@@ -16,8 +16,9 @@ Rule book: the orchestration SKILL.md > "With superpowers". Its path is quoted i
 ${CLAUDE_PLUGIN_ROOT}/skills/orchestration/SKILL.md when running as a Claude Code plugin, otherwise derived from this
 script's own location (<skill>/hooks/agent-tip-kapisi.py -> <skill>/SKILL.md).
 
-Environment variables: ORCH_LOG_DIR moves the denial log; otherwise CLAUDE_PLUGIN_DATA or PLUGIN_DATA (plugin mode),
-otherwise ~/.local/share/agent-tip-kapisi/.
+Environment variables: ORCH_TIP_KAPISI=0 turns the gate off (every call passes, nothing is logged). ORCH_LOG_DIR
+moves the denial log; otherwise CLAUDE_PLUGIN_DATA or PLUGIN_DATA (plugin mode), otherwise
+~/.local/share/agent-tip-kapisi/.
 """
 import json
 import os
@@ -35,6 +36,13 @@ ONERI = ("Use instead: search/map/raw-output summary -> `tarayici`, review/judge
          "implementation+tests -> `worker`, "
          "docs/API verification -> `researcher`. "
          "If the user explicitly asked for another type for this job, tell them about this gate.")
+# Last sentence of every denial: how to turn the gate off (same switch form as the other hooks).
+KAPATMA = "To turn this gate off, set ORCH_TIP_KAPISI=0 in the environment Claude Code runs in."
+
+
+def opus_mu(model):
+    """`opus` (the alias) or a full Opus id such as `claude-opus-4-1`; `claude-opus` without a version is not one."""
+    return model == "opus" or model.startswith("claude-opus-")
 
 
 def kural_kitabi():
@@ -85,6 +93,8 @@ def karar(neden):
 
 
 def main():
+    if os.environ.get("ORCH_TIP_KAPISI", "1").strip() == "0":
+        sys.exit(0)
     try:
         veri = json.load(sys.stdin)
     except Exception:
@@ -95,12 +105,13 @@ def main():
     # The `model` parameter of an Agent call overrides the agent file's model [docs: Agent tool schema].
     # Superpowers "Model Selection" produces exactly that (worker + haiku). Non-opus models are closed.
     model = ((veri.get("tool_input") or {}).get("model") or "").strip().lower()
-    if model and model != "opus":
+    if model and not opus_mu(model):
         logla(veri, f"model {model} is not opus")
         karar(f"`model: {model}` is closed: a subagent's model comes from its agent file (Opus, medium effort); "
               "the `model` parameter in the call overrides it. Remove the parameter. For read-only "
               "search/map/summary work that needs Sonnet, use the `tarayici` type. Other models for other work "
-              f"only if the user says so; if they did, tell them about this gate. Rule book: {kural_kitabi()}")
+              f"only if the user says so; if they did, tell them about this gate. Rule book: {kural_kitabi()}. "
+              f"{KAPATMA}")
 
     tip = ((veri.get("tool_input") or {}).get("subagent_type") or "").strip()
     # Plugin agents are named `<plugin>:<agent>` (e.g. `orchestration:explorer`): the check uses the last part, so
@@ -109,7 +120,8 @@ def main():
         gorunen = tip or "(empty -> general-purpose)"
         logla(veri, f"forbidden type {gorunen}")
         karar(f"The `{gorunen}` type is closed: it inherits the main session's effort or ignores the model "
-              f"setting (subagents must run as Opus at medium effort). {ONERI} Rule book: {kural_kitabi()}")
+              f"setting (subagents must run as Opus at medium effort). {ONERI} Rule book: {kural_kitabi()}. "
+              f"{KAPATMA}")
     sys.exit(0)
 
 
