@@ -1,0 +1,36 @@
+{
+  "name": "orchestration",
+  "version": "0.1.0",
+  "description": "Orchestration rules for Claude Code and Codex CLI: a main session that coordinates, narrow role-based subagents (explorer, worker, researcher, tarayici), a cross-family critic, and guard hooks.",
+  "author": {
+    "name": "OWNER",
+    "url": "https://github.com/OWNER"
+  },
+  "homepage": "https://github.com/OWNER/claude-codex-orchestration",
+  "repository": "https://github.com/OWNER/claude-codex-orchestration",
+  "license": "MIT",
+  "keywords": [
+    "orchestration",
+    "subagents",
+    "multi-agent",
+    "codex",
+    "claude-code",
+    "hooks",
+    "code-review"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex-hooks.json",
+  "interface": {
+    "displayName": "Orchestration",
+    "shortDescription": "Coordinate subagents by role, with a cross-family critic and guard hooks",
+    "longDescription": "A main session that plans, briefs, checks and synthesises while narrow subagents explore, implement and research. Includes a read-budget hook, a superpowers version watcher, and a cross-family critic script.",
+    "developerName": "OWNER",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/OWNER/claude-codex-orchestration"
+  }
+}

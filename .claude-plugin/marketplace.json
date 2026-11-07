@@ -1,0 +1,14 @@
+{
+  "name": "claude-codex-orchestration",
+  "description": "Marketplace for the orchestration plugin (Claude Code and Codex CLI).",
+  "owner": {
+    "name": "OWNER"
+  },
+  "plugins": [
+    {
+      "name": "orchestration",
+      "source": "./",
+      "description": "Orchestration rules for Claude Code and Codex CLI: a main session that coordinates, narrow role-based subagents (explorer, worker, researcher, tarayici), a cross-family critic, and guard hooks."
+    }
+  ]
+}

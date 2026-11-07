@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="956" viewBox="0 0 1200 956" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif">
+<title id="t">Claude Code + Codex orchestration flow</title>
+<desc id="d">User gives a task to the main session, which briefs parallel subagents through an agent-type gate; subagents return evidence; K1 same-family review, K2 cross-family critic and the advisor check the work; the main session synthesizes the answer for the user. Irreversible actions need user approval.</desc>
+<rect x="0" y="0" width="1200" height="956" rx="18" fill="#F6F8FA"/>
+<text x="40" y="46" font-size="24" font-weight="700" fill="#1F2328" text-anchor="start">Claude Code + Codex orchestration flow</text>
+<text x="40" y="72" font-size="15" font-weight="400" fill="#57606A" text-anchor="start">The main session plans, briefs and reviews; subagents do the work and return evidence.</text>
+<polyline points="190,161 260,161" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="268,161 259,155.5 259,166.5" fill="#8C959F"/>
+<text x="229" y="151" font-size="14" font-weight="700" fill="#57606A" text-anchor="middle">task</text>
+<polyline points="550,235 550,254" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="550,262 544.5,253 555.5,253" fill="#8C959F"/>
+<text x="562" y="254" font-size="14" font-weight="700" fill="#57606A" text-anchor="start">briefs</text>
+<polyline points="550,346 550,360 184,360 184,400" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="184,408 178.5,399 189.5,399" fill="#8C959F"/>
+<polyline points="550,346 550,360 461,360 461,400" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="461,408 455.5,399 466.5,399" fill="#8C959F"/>
+<polyline points="550,346 550,360 738,360 738,400" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="738,408 732.5,399 743.5,399" fill="#8C959F"/>
+<polyline points="550,346 550,360 1015,360 1015,400" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="1015,408 1009.5,399 1020.5,399" fill="#8C959F"/>
+<polyline points="184,528 184,552 420,552 420,558" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="420,566 414.5,557 425.5,557" fill="#8C959F"/>
+<polyline points="461,528 461,552 540,552 540,558" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="540,566 534.5,557 545.5,557" fill="#8C959F"/>
+<polyline points="738,528 738,552 660,552 660,558" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="660,566 654.5,557 665.5,557" fill="#8C959F"/>
+<polyline points="1015,528 1015,552 780,552 780,558" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="780,566 774.5,557 785.5,557" fill="#8C959F"/>
+<polyline points="330,603 205,603 205,672" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="205,680 199.5,671 210.5,671" fill="#8C959F"/>
+<polyline points="370,752 390,752" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="398,752 389,746.5 389,757.5" fill="#8C959F"/>
+<polyline points="840,752 860,752" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="868,752 859,746.5 859,757.5" fill="#8C959F"/>
+<polyline points="920,822 920,898 840,898" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="832,898 841,892.5 841,903.5" fill="#8C959F"/>
+<polyline points="330,898 200,898" fill="none" stroke="#8C959F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="192,898 201,892.5 201,903.5" fill="#8C959F"/>
+<rect x="40" y="374" width="1120" height="170" rx="14" fill="#EEF1F4" stroke="#AFB8C1" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="64" y="398" font-size="14" font-weight="700" fill="#57606A" text-anchor="start">PARALLEL SUBAGENTS · MEDIUM EFFORT · ONE BRIEF EACH</text>
+<circle cx="875" cy="393" r="5" fill="#D97757"/>
+<text x="886" y="398" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Claude: Opus</text>
+<circle cx="1015" cy="393" r="5" fill="#0E8A6E"/>
+<text x="1026" y="398" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Codex: Sol</text>
+<circle cx="40" cy="374" r="13" fill="#D97757"/>
+<text x="40" y="379" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">4</text>
+<rect x="860" y="95" width="300" height="140" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="876" y="123" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">Legend</text>
+<circle cx="881" cy="144" r="5" fill="#D97757"/>
+<text x="892" y="149" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Claude family (Opus, Sonnet)</text>
+<circle cx="881" cy="166" r="5" fill="#0E8A6E"/>
+<text x="892" y="171" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Codex family (Astra, Sol)</text>
+<text x="876" y="193" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">lit card = current step</text>
+<text x="876" y="215" font-size="15" font-weight="400" fill="#57606A" text-anchor="start">faded card = step done</text>
+<rect x="40" y="125" width="150" height="72" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="56" y="153" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">User</text>
+<text x="56" y="179" font-size="15" font-weight="400" fill="#57606A" text-anchor="start">gives a task</text>
+<circle cx="40" cy="125" r="13" fill="#D97757"/>
+<text x="40" y="130" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">1</text>
+<rect x="270" y="95" width="560" height="140" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="286" y="123" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">Main session</text>
+<circle cx="291" cy="144" r="5" fill="#D97757"/>
+<text x="302" y="149" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Claude Code: Opus · high</text>
+<circle cx="291" cy="166" r="5" fill="#0E8A6E"/>
+<text x="302" y="171" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Codex: Astra · high</text>
+<text x="286" y="193" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">plan · decide · brief · review · synthesize</text>
+<text x="286" y="215" font-size="15" font-weight="400" fill="#57606A" text-anchor="start">does no hands-on work</text>
+<circle cx="270" cy="95" r="13" fill="#D97757"/>
+<text x="270" y="100" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">2</text>
+<rect x="330" y="264" width="440" height="82" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<rect x="344" y="290" width="5" height="30" rx="1.5" fill="#57606A"/>
+<rect x="371" y="290" width="5" height="30" rx="1.5" fill="#57606A"/>
+<rect x="347" y="297" width="26" height="4" rx="1" fill="#57606A"/>
+<rect x="347" y="307" width="26" height="4" rx="1" fill="#57606A"/>
+<text x="388" y="292" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">Agent-type gate (hook)</text>
+<text x="388" y="316" font-size="14" font-weight="400" fill="#57606A" text-anchor="start">blocks general-purpose / Explore / fork</text>
+<text x="388" y="336" font-size="14" font-weight="400" fill="#57606A" text-anchor="start">enforces the model from the agent file</text>
+<circle cx="330" cy="264" r="13" fill="#D97757"/>
+<text x="330" y="269" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">3</text>
+<rect x="56" y="410" width="257" height="118" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="72" y="438" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">explorer</text>
+<text x="72" y="464" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">read-only review</text>
+<rect x="333" y="410" width="257" height="118" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="349" y="438" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">worker</text>
+<text x="349" y="464" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">implements + tests</text>
+<rect x="610" y="410" width="257" height="118" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="626" y="438" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">researcher</text>
+<text x="626" y="464" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">docs / API check</text>
+<rect x="887" y="410" width="257" height="118" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="903" y="438" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">tarayici</text>
+<text x="903" y="464" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">fast scanner</text>
+<circle cx="908" cy="481" r="5" fill="#D97757"/>
+<text x="919" y="486" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Sonnet (Claude)</text>
+<circle cx="908" cy="503" r="5" fill="#0E8A6E"/>
+<text x="919" y="508" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Sol (Codex)</text>
+<rect x="330" y="568" width="540" height="70" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="346" y="596" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">Evidence back to the main session</text>
+<text x="346" y="622" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">command · exit code · diffstat · file:line</text>
+<circle cx="330" cy="568" r="13" fill="#D97757"/>
+<text x="330" y="573" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">5</text>
+<rect x="40" y="682" width="330" height="140" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="56" y="710" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">K1 · same-family review</text>
+<text x="56" y="736" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">fresh explorer per task</text>
+<text x="56" y="758" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">checks spec + quality</text>
+<circle cx="40" cy="682" r="13" fill="#D97757"/>
+<text x="40" y="687" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">6</text>
+<rect x="400" y="682" width="440" height="140" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="416" y="710" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">K2 · cross-family critic</text>
+<circle cx="421" cy="731" r="5" fill="#0E8A6E"/>
+<text x="432" y="736" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Claude session → Codex</text>
+<text x="416" y="758" font-size="14" font-weight="400" fill="#57606A" text-anchor="start">Sol at task boundary, Astra at branch end</text>
+<circle cx="421" cy="773" r="5" fill="#D97757"/>
+<text x="432" y="778" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Codex session → Claude Opus</text>
+<text x="416" y="800" font-size="14" font-weight="400" fill="#57606A" text-anchor="start">“find the weakest point; if none, say none”</text>
+<circle cx="400" cy="682" r="13" fill="#D97757"/>
+<text x="400" y="687" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">7</text>
+<rect x="870" y="682" width="290" height="140" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="886" y="710" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">Advisor</text>
+<circle cx="891" cy="731" r="5" fill="#D97757"/>
+<text x="902" y="736" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Claude sessions only</text>
+<text x="886" y="758" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">consulted before “done”</text>
+<circle cx="870" cy="682" r="13" fill="#D97757"/>
+<text x="870" y="687" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">8</text>
+<rect x="330" y="864" width="500" height="68" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="346" y="892" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">Main session synthesizes</text>
+<text x="346" y="918" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">one checked answer goes back</text>
+<circle cx="330" cy="864" r="13" fill="#D97757"/>
+<text x="330" y="869" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="start">9</text>
+<rect x="40" y="864" width="150" height="68" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
+<text x="56" y="892" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">User</text>
+<text x="56" y="918" font-size="15" font-weight="400" fill="#57606A" text-anchor="start">gets the result</text>
+<rect x="960" y="838" width="200" height="108" rx="10" fill="#FFFFFF" stroke="#57606A" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="976" y="866" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">Rule</text>
+<text x="976" y="892" font-size="14" font-weight="400" fill="#57606A" text-anchor="start">irreversible actions</text>
+<text x="976" y="912" font-size="14" font-weight="400" fill="#57606A" text-anchor="start">(push, publish)</text>
+<text x="976" y="932" font-size="14" font-weight="400" fill="#57606A" text-anchor="start">→ user approval</text>
+</svg>

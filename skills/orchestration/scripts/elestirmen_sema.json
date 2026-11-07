@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["zayiflik_var", "bulgular", "belirsizlik"],
+  "properties": {
+    "zayiflik_var": {"type": "boolean"},
+    "bulgular": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bulgu", "onem", "kanit", "oneri"],
+        "properties": {
+          "bulgu": {"type": "string"},
+          "onem": {"type": "string", "enum": ["yuksek", "orta", "dusuk"]},
+          "kanit": {"type": "string"},
+          "oneri": {"type": "string"}
+        }
+      }
+    },
+    "belirsizlik": {"type": "string"}
+  }
+}
