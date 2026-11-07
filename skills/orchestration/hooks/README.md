@@ -44,7 +44,7 @@ Where the installed version is read from:
 Sums, per session, the character count of the main session's Read, Bash, Grep and Glob output. When the total
 crosses the threshold, and then once at each multiple (2x, 3x ...), this note is added:
 
-> The main session has collected ~41k characters of read/command output this session. Delegate exploration and verification to explorer/tarayici (orchestration > Delegation).
+> The main session has collected ~41k characters of read/command output this session. Delegate exploration and verification to explorer/scanner (orchestration > Delegation).
 
 - Threshold: `ORCH_OKUMA_ESIGI` (characters, default 40000). Rationale: in a measurement the main session's Bash work
   output was twice the size of the subagent results; the measured median starting context was about 80k tokens.
@@ -115,7 +115,7 @@ Enforces the agent type and model tree on every `Agent`/`Task` call, including c
   version, `sonnet`, `haiku` and any other value are denied.
 - The general-purpose types `general-purpose`, `Explore`, `Plan`, `claude`, `fork` and an empty type (which means
   `general-purpose`) are denied (case-insensitive): they inherit the main session's effort or ignore the model
-  setting. The denial message suggests `tarayici`, `explorer`, `worker` or `researcher`.
+  setting. The denial message suggests `scanner`, `explorer`, `worker` or `researcher`.
 - A plugin-qualified type `<plugin>:<agent>` (for example `orchestration:explorer` when this repo is installed as
   a Claude Code plugin) is checked by its last part: `orchestration:explorer` passes, `x:general-purpose` is denied.
 - Every other type passes, including plugin agents and narrow built-ins such as `claude-code-guide`.

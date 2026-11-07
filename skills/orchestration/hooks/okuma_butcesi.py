@@ -70,7 +70,7 @@ VARSAYILAN_ESIK = 40000
 AZAMI_KOMUT = 16384
 SAKLAMA_SN = 7 * 86400  # 7 days: state of closed sessions does not pile up, a running session is unaffected
 METIN = ("The main session has collected ~{n}k characters of read/command output this session. Delegate "
-         "exploration and verification to explorer/tarayici (orchestration > Delegation).")
+         "exploration and verification to explorer/scanner (orchestration > Delegation).")
 
 NOKTALAMA = ".,;:!?)\"'"
 

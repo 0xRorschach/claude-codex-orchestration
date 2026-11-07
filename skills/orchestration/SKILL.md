@@ -5,8 +5,8 @@ description: "Agent-type and model tree, delegation rules, cross-family critic a
 
 # Orchestration: model tree and delegation
 
-**Names.** File, agent and env names are Turkish in origin and kept on purpose (renaming would ripple through tests,
-hook registrations and this file): `tarayici` = scanner, `okuma_butcesi` = read budget, `aile_elestirmen` = family
+**Names.** File and env names are Turkish in origin and kept on purpose (renaming would ripple through tests,
+hook registrations and this file): `okuma_butcesi` = read budget, `aile_elestirmen` = family
 critic, `paralel-is-hatirlatici` = parallel-work reminder, `agent-tip-kapisi` = agent-type gate,
 `superpowers_surum_bekcisi` = superpowers version guard, `gorsel_uret` = image generation,
 `orkestrasyon_hatirlatici` = orchestration load reminder, `K1` / `K2` = critic layer 1 / 2.
@@ -27,7 +27,7 @@ that family). No version numbers in rule text; versions live only in dated recor
 |---|---|---|
 | Main session: decide, brief, review, synthesize | Opus · high | Astra · high |
 | Subagents (`explorer` / `worker` / `researcher`) | Opus · medium | Sol · medium |
-| Scanner (read-only search / map / raw-output summary) | Sonnet · medium (`tarayici`) | Sol · medium (`tarayici` role; Luna not measured) |
+| Scanner (read-only search / map / raw-output summary) | Sonnet · medium (`scanner`) | Sol · medium (`scanner` role; Luna not measured) |
 | Lower tier, for any other work **only if the user says so** [profile] | Sonnet | Luna |
 | Second opinion (audit), key points only | Astra · medium · read-only; methodology gates high; task-boundary K2 (task flagged `K2: yes`) Sol | Claude Opus · read-only |
 | Advisor | Fable (`advisor` tool) | none |
@@ -82,7 +82,7 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
 - **Read-budget hook** `hooks/okuma_butcesi.py` (PostToolUse; only adds a note, never blocks) sums the main session's
   Read/Bash/Grep/Glob output per session (in Codex, shell commands only). When the total crosses `ORCH_OKUMA_ESIGI`
   (default 40000 characters) and then each multiple, it adds a note to delegate exploration and verification to
-  explorer/tarayici. Silent inside subagents. Not counted: `git commit` / `git push` / `git log -1`, `codex exec`,
+  explorer/scanner. Silent inside subagents. Not counted: `git commit` / `git push` / `git log -1`, `codex exec`,
   `aile_elestirmen.py`, extra scripts in `ORCH_MUAF_BETIKLER` (comma-separated file names, e.g. your own notes CLI),
   heredocs writing to `.md`, `--help` / `--version` (compound-command and `git log` details: `hooks/README.md`). Off:
   `ORCH_OKUMA_BUTCESI=0`. Registration: see README; timeouts 5 s (PostToolUse) and 10 s (SessionStart) in both apps.
@@ -121,7 +121,7 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
   [measured n=1]) and the main session's review capacity; the technical limit is nesting depth, not count (default 3
   levels [doc]).
 - **Nesting:** a spawned agent follows the same type rules; **it may open helpers, it may not become a manager**. In
-  practice only `worker` can spawn; `explorer`, `researcher`, `tarayici` have no agent tool.
+  practice only `worker` can spawn; `explorer`, `researcher`, `scanner` have no agent tool.
 - **Irreversible actions, two tiers.** A subagent does not push, delete remotes, delete untracked files, or write
   outside the workspace or to an external service; it returns to the main session. Outward-facing or hard-to-reverse
   actions also need the user's approval: the main session's approval does not replace the user's. Local edits need no
@@ -147,16 +147,16 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
   explorer + real measurement 4 errors, Astra 1) caught what single-lens reviews missed; fan-out gains nothing in
   sequential work sharing the same file.
 - **Lower tier (Sonnet / Haiku / Luna) only if the user says so** [profile]; never drop down because "it is simple".
-  The one exception is `tarayici`: the drop happens by agent type, not by judgment at call time.
-- **`tarayici` or `explorer`:** "where / called from / map / summarize this output" → `tarayici`; anything with
+  The one exception is `scanner`: the drop happens by agent type, not by judgment at call time.
+- **`scanner` or `explorer`:** "where / called from / map / summarize this output" → `scanner`; anything with
   judgment (spec compliance, is the code right, is the plan sound) → `explorer`. [measured n=2, blind scoring] in
   search Sonnet ≈ Opus; in document verification Sonnet made a factual error → `researcher` stays on Opus; review and
   implementation were not measured, so they stay on Opus. Haiku 5.5 was tried as a single-artifact scanner and made
   more false "none" claims than Sonnet in a blind comparison (9 runs each, 1-0); not adopted [measured 2026-10-08].
-- **`tarayici` mechanical work.** Work whose verdict comes from code or output goes to `tarayici`: running a script and
+- **`scanner` mechanical work.** Work whose verdict comes from code or output goes to `scanner`: running a script and
   relaying its output verbatim (audit script, word count), test/log summaries, inventory / symbol location / call
   trace (quote the line itself for every `path:line`). If a script prints an error (`HATA` or similar), the fix is the
-  `worker`'s; `tarayici` adds no "clean" comment. Checklist-bound format checks are in scope too. Every `tarayici`
+  `worker`'s; `scanner` adds no "clean" comment. Checklist-bound format checks are in scope too. Every `scanner`
   brief contains: "do not write notes outside the template; fill only the requested fields". Document, API and source
   verification never go to Sonnet; they stay with `researcher`. [measured 2026-11-07, blind comparison n=3/cell, 24
   runs: accuracy Sonnet 96/96, Opus 95/96; out-of-template note errors Sonnet 1, Opus 7; Sonnet 26-34% faster] Task
@@ -416,9 +416,9 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
 ## In Claude Code
 
 - Subagents are **`explorer` / `worker` / `researcher`** (`model: opus`, `effort: medium`) and read-only
-  search/map/summary `tarayici` (`model: sonnet`, `effort: medium`). User-level install (`~/.claude/agents/`): plain
+  search/map/summary `scanner` (`model: sonnet`, `effort: medium`). User-level install (`~/.claude/agents/`): plain
   names (`explorer`); plugin install: `orchestration:explorer`, `orchestration:worker`, `orchestration:researcher`,
-  `orchestration:tarayici`. Both forms mean the same agent; the bare names in this file cover both. Add your own
+  `orchestration:scanner`. Both forms mean the same agent; the bare names in this file cover both. Add your own
   specialist agents (e.g. a literature screener) with the same settings; the gate allows any non-built-in type.
 - **Do not use the built-in `Explore` / `general-purpose`**: they carry no `effort` and inherit the main session's
   high. **Do not use `fork`**: it ignores the model setting and clones the main session.
@@ -429,7 +429,7 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
   switch, set in the environment the tool starts in; every denial message names it). If rejected,
   reopen with the right type; if the user asked for another type, tell them about the gate, never loosen it yourself.
 - Do not write a `model` parameter; the agent file sets the model (the gate rejects non-Opus). If Sonnet is needed,
-  use the `tarayici` type, not a parameter. Fable is never opened as a subagent; it is only the advisor.
+  use the `scanner` type, not a parameter. Fable is never opened as a subagent; it is only the advisor.
 - **Advisor:** the `advisor` tool (`~/.claude/settings.json` → `advisorModel: "fable"`); a `/advisor` change takes
   effect in the current chat only after `/clear` or `/compact`.
 - **Effort inheritance:** never set the top-level `effortLevel` below high: a new Opus/Fable without a `modelSettings`
@@ -465,7 +465,7 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
 
 ## In Codex
 
-- Subagents are the **`explorer` / `worker` / `researcher` / `tarayici`** roles (`~/.codex/agents/*.toml`, all Sol,
+- Subagents are the **`explorer` / `worker` / `researcher` / `scanner`** roles (`~/.codex/agents/*.toml`, all Sol,
   `medium`); a Codex plugin cannot carry agent roles, so `install.sh` copies them there from the repo's
   `codex/agents/` (see README). Add your own roles the same way. The role file must have a `model` line; the role
   model applies only
@@ -493,7 +493,7 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
   (`hooks/okuma_butcesi.py`) runs in Codex as well and counts only shell commands (file reads are shell commands
   there). Register it in Codex's `hooks.json` from `hooks/codex-parcasi.json`; Codex runs a new or changed hook only
   after you trust it with `/hooks` inside Codex (`hooks/README.md`).
-- **Mechanical work:** the `tarayici` role (Sol) takes script-output relay, test/log summaries, inventory and call
+- **Mechanical work:** the `scanner` role (Sol) takes script-output relay, test/log summaries, inventory and call
   traces; document/source verification is `researcher`'s. Luna not measured; lower-tier rule applies (only if the user
   says so) [profile].
 - **Image generation:** the main session uses the built-in image tool directly (important images); a subagent on Sol

@@ -9,7 +9,7 @@ Static version: [docs/assets/orchestration-flow.svg](docs/assets/orchestration-f
 ## What it does
 
 - **The main session orchestrates.** It plans, decides, writes briefs, reviews what comes back and synthesizes one answer. It does no hands-on work (exploring, editing, testing); that goes to subagents, so its context stays free for coordination.
-- **Typed subagents** at medium effort: `explorer` (read-only judgement: code review, spec checks), `worker` (applies a decided change and runs its tests), `researcher` (checks current library, API and CLI behaviour), `tarayici` (fast read-only search, maps and output summaries). General-purpose agent types are not used.
+- **Typed subagents** at medium effort: `explorer` (read-only judgement: code review, spec checks), `worker` (applies a decided change and runs its tests), `researcher` (checks current library, API and CLI behaviour), `scanner` (fast read-only search, maps and output summaries). General-purpose agent types are not used.
 - **K1: same-family review** after each task, by a fresh subagent.
 - **K2: cross-family critic.** From a Claude session the work goes to Codex (Astra or Sol); from a Codex session it goes to Claude Opus. It runs through `skills/orchestration/scripts/aile_elestirmen.py` and is mandatory for multi-task plans, multi-file changes, schema or gate changes and outbound output.
 - **Advisor** (Claude only, optional): consulted before declaring work done.
@@ -46,7 +46,7 @@ From the shell:
 claude plugin install orchestration --marketplace OWNER/claude-codex-orchestration
 ```
 
-Plugin agents appear with the plugin prefix: `orchestration:explorer`, `orchestration:worker`, `orchestration:researcher`, `orchestration:tarayici`. The agent-type gate checks the last part, so these pass.
+Plugin agents appear with the plugin prefix: `orchestration:explorer`, `orchestration:worker`, `orchestration:researcher`, `orchestration:scanner`. The agent-type gate checks the last part, so these pass.
 
 ### Codex
 
@@ -151,11 +151,10 @@ Environment variables (full details in `skills/orchestration/hooks/README.md` an
 
 ## Names
 
-File, agent and environment variable names are Turkish in origin and kept on purpose: renaming would ripple through tests and hook registrations. A short glossary:
+File and environment variable names are Turkish in origin and kept on purpose: renaming would ripple through tests and hook registrations. A short glossary:
 
 | Name | Meaning |
 |---|---|
-| `tarayici` | scanner |
 | `okuma_butcesi` | read budget |
 | `aile_elestirmen` | family critic |
 | `paralel-is-hatirlatici` | parallel-work reminder |

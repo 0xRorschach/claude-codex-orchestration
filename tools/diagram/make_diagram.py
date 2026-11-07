@@ -194,8 +194,8 @@ CARDS = [
          "worker", [("body", "implements + tests")], badge=False),
     card("researcher", SUB_X0 + 2 * (SUB_W + SUB_GAP), SUB_Y, SUB_W, SUB_H, 4,
          "researcher", [("body", "docs / API check")], badge=False),
-    card("tarayici", SUB_X0 + 3 * (SUB_W + SUB_GAP), SUB_Y, SUB_W, SUB_H, 4,
-         "tarayici", [("body", "fast scanner"), ("claude", "Sonnet (Claude)"),
+    card("scanner", SUB_X0 + 3 * (SUB_W + SUB_GAP), SUB_Y, SUB_W, SUB_H, 4,
+         "scanner", [("body", "fast search"), ("claude", "Sonnet (Claude)"),
                       ("codex", "Sol (Codex)")], badge=False),
     card("evidence", 330, 568, 540, 70, 5, "Evidence back to the main session", [
         ("body", "command · exit code · diffstat · file:line"),

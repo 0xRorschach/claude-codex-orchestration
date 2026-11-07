@@ -11,7 +11,7 @@ Each entry: **default** · what it means · how to change it.
 
 1. **Lower model tier only on request.**
    Default: Sonnet / Haiku (Claude) and Luna (Codex) are used for general work only when you say so; the one
-   built-in exception is the `tarayici` (scanner) agent type, which runs on Sonnet/Sol by design.
+   built-in exception is the `scanner` agent type, which runs on Sonnet/Sol by design.
    Meaning: the agent never drops to a cheaper model because a task "looks simple".
    Change: "You may use Sonnet for <kind of work> without asking." Model IDs themselves live in
    `scripts/modeller.json` and the agent files.

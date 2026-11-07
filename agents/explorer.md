@@ -1,6 +1,6 @@
 ---
 name: explorer
-description: Read-only exploration and review that requires judgment (Opus · medium). Use for code review, spec-compliance checks, code quality, plan/document review, and exploration that needs a judgment such as "is this correct / is this robust / why is it like this". Do NOT use for plain search, "where is X / where is it called from", code maps or raw-output summaries -> tarayici. Does not dump files; returns results with file:line references. Changes nothing.
+description: Read-only exploration and review that requires judgment (Opus · medium). Use for code review, spec-compliance checks, code quality, plan/document review, and exploration that needs a judgment such as "is this correct / is this robust / why is it like this". Do NOT use for plain search, "where is X / where is it called from", code maps or raw-output summaries -> scanner. Does not dump files; returns results with file:line references. Changes nothing.
 disallowedTools: Edit, Write, NotebookEdit, Agent
 model: opus
 effort: medium

@@ -153,8 +153,8 @@ class Base(unittest.TestCase):
         return sorted(p.name for p in d.glob("*.toml")) if d.exists() else []
 
 
-ROLES = ["explorer.toml", "researcher.toml", "tarayici.toml", "worker.toml"]
-AGENTS = ["explorer.md", "researcher.md", "tarayici.md", "worker.md"]
+ROLES = ["explorer.toml", "researcher.toml", "scanner.toml", "worker.toml"]
+AGENTS = ["explorer.md", "researcher.md", "scanner.md", "worker.md"]
 
 
 class TestPluginMode(Base):

@@ -52,9 +52,9 @@ Entries are in date order. Measurements are tagged `[measured ...]`, documentati
 - **Rule:** The inline option of writing-plans is not offered; execution defaults to subagent-driven, while approval of plan content remains a separate question.
 - **Why:** Execution method is a standing decision already recorded in the setup; asking it for every plan repeats a settled question.
 
-### 2026-09-28 · Route search to `tarayici`, judgment to `explorer`
+### 2026-09-28 · Route search to `scanner`, judgment to `explorer`
 
-- **Rule:** Lookup, call-site, map and output-summary tasks go to `tarayici` (Sonnet); anything with judgment goes to `explorer`, and document verification stays with `researcher` on Opus.
+- **Rule:** Lookup, call-site, map and output-summary tasks go to `scanner` (Sonnet); anything with judgment goes to `explorer`, and document verification stays with `researcher` on Opus.
 - **Why:** [measured, n=2, blind scoring] Sonnet roughly matched Opus on search but made a factual error on document verification; review and implementation were not measured, so they stay on Opus.
 
 ### 2026-10-02 · Rules serve teamwork, not restriction
@@ -95,7 +95,7 @@ Entries are in date order. Measurements are tagged `[measured ...]`, documentati
 
 ### 2026-10-08 · Haiku not adopted as scanner
 
-- **Rule:** The `tarayici` role stays on Sonnet; Haiku is not used as a single-artifact scanner.
+- **Rule:** The `scanner` role stays on Sonnet; Haiku is not used as a single-artifact scanner.
 - **Why:** [measured 2026-10-08, blind comparison, 9 runs] Haiku made more false absence claims than Sonnet (1-0).
 - **Alternatives rejected:** Haiku as the scanner tier.
 
@@ -152,9 +152,9 @@ Entries are in date order. Measurements are tagged `[measured ...]`, documentati
 - **Rule:** The main session may write records and briefs, run engine and gate commands, commit, push, merge and call the cross-family critic, while reading files for discovery, running tests, converting documents and editing go to sub-agents; a PostToolUse hook (`hooks/okuma_butcesi.py`) adds a delegate-discovery note when the session's read output passes `ORCH_OKUMA_ESIGI` (default 40000 characters).
 - **Why:** The earlier rule did not define active work, so Bash reading stayed the largest class of main-session work. Threshold: [measured 2026-11-07, n=107 main sessions] median Agent result 16k, median Bash work output 44k characters; 40k sits between them and warns in about half the sessions.
 
-### 2026-11-07 · Mechanical work goes to `tarayici`
+### 2026-11-07 · Mechanical work goes to `scanner`
 
-- **Rule:** Tasks whose verdict comes from code or output (running a script and relaying its output, test or log summaries, inventories, symbol locations, call traces with the quoted line, checklist-based format checks) go to `tarayici`, whose brief includes the line `do not write notes outside the template; fill only the requested fields`.
+- **Rule:** Tasks whose verdict comes from code or output (running a script and relaying its output, test or log summaries, inventories, symbol locations, call traces with the quoted line, checklist-based format checks) go to `scanner`, whose brief includes the line `do not write notes outside the template; fill only the requested fields`.
 - **Why:** [measured 2026-11-07, blind comparison, n=3 per cell, 24 runs] accuracy Sonnet 96/96, Opus 95/96; off-template note errors Sonnet 1, Opus 7; Sonnet 26-34% faster. Document, API and source verification still stays with `researcher`.
 
 ### 2026-11-07 · Critic families: K1 same family, K2 different family

@@ -2,8 +2,8 @@
 
 Bu dosya SKILL.md'nin Türkçe okuma kopyasıdır; model SKILL.md'yi yükler. İki dosya ayrışırsa SKILL.md geçerlidir.
 
-**Adlar.** Dosya, ajan ve env adları Türkçe kökenlidir ve bilerek korunur (ad değiştirmek testlere, kanca kayıtlarına
-ve bu dosyaya yayılırdı): `tarayici` = tarayıcı (scanner), `okuma_butcesi` = okuma bütçesi, `aile_elestirmen` = aile
+**Adlar.** Dosya ve env adları Türkçe kökenlidir ve bilerek korunur (ad değiştirmek testlere, kanca kayıtlarına
+ve bu dosyaya yayılırdı): `okuma_butcesi` = okuma bütçesi, `aile_elestirmen` = aile
 eleştirmeni, `paralel-is-hatirlatici` = paralel iş hatırlatıcısı, `agent-tip-kapisi` = ajan tipi kapısı,
 `superpowers_surum_bekcisi` = superpowers sürüm bekçisi, `gorsel_uret` = görsel üretimi,
 `orkestrasyon_hatirlatici` = orkestrasyon yükleme hatırlatıcısı, `K1` / `K2` = eleştirmen katmanı 1 / 2.
@@ -24,7 +24,7 @@ Kural metninde sürüm numarası yok; sürümler yalnız tarihli kayıtlarda ve 
 |---|---|---|
 | Ana oturum: karar, brief, denetim, sentez | Opus · high | Astra · high |
 | Alt ajanlar (`explorer` / `worker` / `researcher`) | Opus · medium | Sol · medium |
-| Tarayıcı (salt-okur arama / yapı dökümü / ham çıktı özeti) | Sonnet · medium (`tarayici`) | Sol · medium (`tarayici` rolü; Luna ölçülmedi) |
+| Tarayıcı (salt-okur arama / yapı dökümü / ham çıktı özeti) | Sonnet · medium (`scanner`) | Sol · medium (`scanner` rolü; Luna ölçülmedi) |
 | Alt kademe, başka her iş için **yalnız kullanıcı söylerse** [profil] | Sonnet | Luna |
 | İkinci görüş (audit), yalnız kilit noktalar | Astra · medium · salt-okur; metodoloji kapılarında high; görev sınırı K2 (`K2: yes` işaretli görev) Sol | Claude Opus · salt-okur |
 | Danışman | Fable (`advisor` aracı) | yok |
@@ -77,7 +77,7 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
   alt ajanın kanıtı eksikse ana oturum kendi grep'ini koşmaz; taze bir inceleyici açar.
 - **Okuma bütçesi kancası** `hooks/okuma_butcesi.py` (PostToolUse; yalnız not ekler, hiç engellemez) ana oturumun
   Read/Bash/Grep/Glob çıktısını oturum başına toplar (Codex'te yalnız kabuk komutları). Toplam `ORCH_OKUMA_ESIGI`
-  değerini (varsayılan 40000 karakter) ve sonra her katını geçince keşif ile doğrulamayı explorer/tarayici'ye devretme
+  değerini (varsayılan 40000 karakter) ve sonra her katını geçince keşif ile doğrulamayı explorer/scanner'a devretme
   notu ekler. Alt ajanların içinde sessizdir. Sayılmayanlar: `git commit` / `git push` / `git log -1`, `codex exec`,
   `aile_elestirmen.py`, `ORCH_MUAF_BETIKLER` içindeki ek script'ler (virgülle ayrılmış dosya adları, ör. kendi not
   CLI'n), `.md`'ye yazan heredoc'lar, `--help` / `--version` (bileşik komut ve `git log` ayrıntısı: `hooks/README.md`).
@@ -116,7 +116,7 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
   kullanıcıya yaz (iç içe açılanlar dahil). neden: maliyet (boş bir alt ajan bile ~26k token [ölçüm n=1]) ve ana
   oturumun denetim kapasitesi; teknik sınır sayı değil, iç içe derinliktir (varsayılan 3 düzey [doküman]).
 - **İç içe:** açılan ajan aynı tip kurallarına uyar; **yardımcı açabilir, yönetici olamaz**. Pratikte yalnız `worker`
-  ajan açabilir; `explorer`, `researcher`, `tarayici`'nin ajan aracı yoktur.
+  ajan açabilir; `explorer`, `researcher`, `scanner`'ın ajan aracı yoktur.
 - **Geri alınamaz eylem, iki kademe.** Alt ajan push etmez, uzak dal silmez, izlenmeyen dosya silmez, çalışma alanı
   dışına ya da dış bir servise yazmaz; ana oturuma döner. Dışa dönük ya da geri dönüşü zor eylem ayrıca kullanıcının
   onayını ister: ana oturumun onayı kullanıcınınkinin yerine geçmez. Yerel düzenleme durak istemez. Worker görev işini
@@ -140,16 +140,16 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
   "ultracode" izin değildir. neden: bir görevde farklı bakışlar (taze explorer + gerçek ölçüm 4 hata, Astra 1) tek
   mercekli incelemelerin kaçırdığını yakaladı; aynı dosyayı paylaşan sıralı işte dağıtmak bir şey kazandırmaz.
 - **Alt kademe (Sonnet / Haiku / Luna) yalnız kullanıcı söylerse** [profil]; "basit" diye asla aşağı inme. Tek istisna
-  `tarayici`'dir: iniş çağrı anındaki yargıyla değil, ajan tipiyle olur.
-- **`tarayici` mi `explorer` mı:** "nerede / nereden çağrılıyor / yapı dökümü / bu çıktıyı özetle" → `tarayici`; yargı içeren
+  `scanner`'dır: iniş çağrı anındaki yargıyla değil, ajan tipiyle olur.
+- **`scanner` mı `explorer` mı:** "nerede / nereden çağrılıyor / yapı dökümü / bu çıktıyı özetle" → `scanner`; yargı içeren
   her şey (spec'e uyum, kod doğru mu, plan sağlam mı) → `explorer`. [ölçüm n=2, kör puanlama] aramada Sonnet ≈ Opus;
   belge doğrulamada Sonnet olgu hatası yaptı → `researcher` Opus'ta kalır; inceleme ve uygulama ölçülmedi, o yüzden
   Opus'ta kalır. Haiku 5.5 tek dosyalık tarayıcı olarak denendi ve kör karşılaştırmada Sonnet'ten fazla yanlış "yok"
   iddiası üretti (her biri 9 koşu, 1-0); benimsenmedi [ölçüm 2026-10-08].
-- **`tarayici` mekanik işi.** Hükmü koddan ya da çıktıdan gelen iş `tarayici`'ye gider: bir script'i koşup çıktısını
+- **`scanner` mekanik işi.** Hükmü koddan ya da çıktıdan gelen iş `scanner`'a gider: bir script'i koşup çıktısını
   aynen aktarmak (denetim script'i, kelime sayımı), test/log özetleri, envanter / sembol yeri / çağrı izi (her
   `path:line` için satırın kendisini alıntıla). Script bir hata basarsa (`HATA` ya da benzeri) düzeltme `worker`'ındır;
-  `tarayici` "temiz" yorumu eklemez. Kontrol listesine bağlı biçim denetimi de kapsamdadır. Her `tarayici` brief'i şunu
+  `scanner` "temiz" yorumu eklemez. Kontrol listesine bağlı biçim denetimi de kapsamdadır. Her `scanner` brief'i şunu
   içerir: "şablon dışında not yazma; yalnız istenen alanları doldur". Belge, API ve kaynak doğrulaması asla Sonnet'e
   gitmez; `researcher`'da kalır. [ölçüm 2026-11-07, kör karşılaştırma n=3/hücre, 24 koşu: doğruluk Sonnet 96/96, Opus
   95/96; şablon dışı not hatası Sonnet 1, Opus 7; Sonnet %26-34 daha hızlı] Sonnet/Sol için görev tanımları bu biçimde
@@ -409,9 +409,9 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
 ## Claude Code'da
 
 - Alt ajanlar **`explorer` / `worker` / `researcher`** (`model: opus`, `effort: medium`) ve salt-okur
-  arama/yapı dökümü/özet için `tarayici`'dir (`model: sonnet`, `effort: medium`). Kullanıcı düzeyi kurulum
+  arama/yapı dökümü/özet için `scanner`'dır (`model: sonnet`, `effort: medium`). Kullanıcı düzeyi kurulum
   (`~/.claude/agents/`): düz adlar (`explorer`); eklenti kurulumu: `orchestration:explorer`, `orchestration:worker`,
-  `orchestration:researcher`, `orchestration:tarayici`. İki biçim de aynı ajandır; bu dosyadaki çıplak adlar ikisini de
+  `orchestration:researcher`, `orchestration:scanner`. İki biçim de aynı ajandır; bu dosyadaki çıplak adlar ikisini de
   kapsar. Kendi uzman ajanlarını (ör. bir literatür tarayıcısı) aynı ayarlarla ekle; kapı yerleşik olmayan her tipe
   izin verir.
 - **Yerleşik `Explore` / `general-purpose` kullanma**: `effort` taşımazlar ve ana oturumun high düzeyini miras alırlar.
@@ -423,7 +423,7 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
   (kullanıcının anahtarıdır, aracın başladığı ortamda ayarlanır; her ret mesajı bunu söyler). Reddederse doğru tiple
   yeniden aç; kullanıcı başka bir tip istediyse ona kapıyı anlat, kapıyı asla kendin gevşetme.
 - `model` parametresi yazma; modeli ajan dosyası belirler (kapı Opus dışını reddeder). Sonnet gerekirse parametre değil
-  `tarayici` tipini kullan. Fable asla alt ajan olarak açılmaz; yalnız danışmandır.
+  `scanner` tipini kullan. Fable asla alt ajan olarak açılmaz; yalnız danışmandır.
 - **Danışman:** `advisor` aracı (`~/.claude/settings.json` → `advisorModel: "fable"`); `/advisor` değişikliği geçerli
   sohbette ancak `/clear` ya da `/compact` sonrasında etkili olur.
 - **Effort mirası:** üst düzey `effortLevel`'ı asla high'ın altına ayarlama: `modelSettings` girdisi olmayan yeni bir
@@ -459,7 +459,7 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
 
 ## Codex'te
 
-- Alt ajanlar **`explorer` / `worker` / `researcher` / `tarayici`** rolleridir (`~/.codex/agents/*.toml`, hepsi Sol,
+- Alt ajanlar **`explorer` / `worker` / `researcher` / `scanner`** rolleridir (`~/.codex/agents/*.toml`, hepsi Sol,
   `medium`); Codex eklentisi ajan rolü taşıyamaz, bu yüzden `install.sh` onları deponun `codex/agents/` klasöründen
   oraya kopyalar (bkz. README). Kendi rollerini de aynı yolla ekle. Rol dosyasında bir `model` satırı olmalı; rol
   modeli yalnız `spawn_agent` üzerinde `fork_turns="none"` ile uygulanır (aşağıda). **`default` rolünü kullanma**: ana
@@ -486,7 +486,7 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
   (`hooks/okuma_butcesi.py`) Codex'te de koşar ve yalnız kabuk komutlarını sayar (orada dosya okumaları kabuk
   komutudur). Onu `hooks/codex-parcasi.json`'dan Codex'in `hooks.json` dosyasına kaydet; Codex yeni ya da değişmiş bir
   kancayı ancak Codex içinde `/hooks` ile güvendikten sonra koşar (`hooks/README.md`).
-- **Mekanik iş:** `tarayici` rolü (Sol) script çıktısı aktarımını, test/log özetlerini, envanteri ve çağrı izlerini
+- **Mekanik iş:** `scanner` rolü (Sol) script çıktısı aktarımını, test/log özetlerini, envanteri ve çağrı izlerini
   alır; belge/kaynak doğrulaması `researcher`'ındır. Luna ölçülmedi; alt kademe kuralı geçerli (yalnız kullanıcı
   söylerse) [profil].
 - **Görsel üretimi:** ana oturum yerleşik görsel aracını doğrudan kullanır (önemli görseller); gerekirse Sol'de bir alt

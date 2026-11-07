@@ -30,9 +30,9 @@ from pathlib import Path
 # setting. claude-code-guide, statusline-setup and plugin agents are narrow-purpose and rare; deliberately allowed.
 YASAK = {"general-purpose", "explore", "plan", "claude", "fork", ""}
 
-# tarayici (Sonnet, medium effort): its model comes from the agent file, so it passes this gate; dropping to Sonnet
+# scanner (Sonnet, medium effort): its model comes from the agent file, so it passes this gate; dropping to Sonnet
 # through the `model` parameter stays closed.
-ONERI = ("Use instead: search/map/raw-output summary -> `tarayici`, review/judgement-heavy exploration -> `explorer`, "
+ONERI = ("Use instead: search/map/raw-output summary -> `scanner`, review/judgement-heavy exploration -> `explorer`, "
          "implementation+tests -> `worker`, "
          "docs/API verification -> `researcher`. "
          "If the user explicitly asked for another type for this job, tell them about this gate.")
@@ -109,7 +109,7 @@ def main():
         logla(veri, f"model {model} is not opus")
         karar(f"`model: {model}` is closed: a subagent's model comes from its agent file (Opus, medium effort); "
               "the `model` parameter in the call overrides it. Remove the parameter. For read-only "
-              "search/map/summary work that needs Sonnet, use the `tarayici` type. Other models for other work "
+              "search/map/summary work that needs Sonnet, use the `scanner` type. Other models for other work "
               f"only if the user says so; if they did, tell them about this gate. Rule book: {kural_kitabi()}. "
               f"{KAPATMA}")
 

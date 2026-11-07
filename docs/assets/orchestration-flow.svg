@@ -87,8 +87,8 @@
 <text x="626" y="438" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">researcher</text>
 <text x="626" y="464" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">docs / API check</text>
 <rect x="887" y="410" width="257" height="118" rx="10" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.2"/>
-<text x="903" y="438" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">tarayici</text>
-<text x="903" y="464" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">fast scanner</text>
+<text x="903" y="438" font-size="17" font-weight="700" fill="#1F2328" text-anchor="start">scanner</text>
+<text x="903" y="464" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">fast search</text>
 <circle cx="908" cy="481" r="5" fill="#D97757"/>
 <text x="919" y="486" font-size="15" font-weight="400" fill="#1F2328" text-anchor="start">Sonnet (Claude)</text>
 <circle cx="908" cy="503" r="5" fill="#0E8A6E"/>

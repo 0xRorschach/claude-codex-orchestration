@@ -1,7 +1,7 @@
 {
   "name": "orchestration",
   "version": "0.1.0",
-  "description": "Orchestration rules for Claude Code and Codex CLI: a main session that coordinates, narrow role-based subagents (explorer, worker, researcher, tarayici), a cross-family critic, and guard hooks.",
+  "description": "Orchestration rules for Claude Code and Codex CLI: a main session that coordinates, narrow role-based subagents (explorer, worker, researcher, scanner), a cross-family critic, and guard hooks.",
   "author": {
     "name": "OWNER"
   },

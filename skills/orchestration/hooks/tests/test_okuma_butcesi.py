@@ -43,7 +43,7 @@ class OkumaButcesi(unittest.TestCase):
         self.k(bash("x" * 600))
         p = self.k(bash("x" * 600))
         self.assertEqual(baglam(p), "The main session has collected ~1k characters of read/command output this "
-                                    "session. Delegate exploration and verification to explorer/tarayici "
+                                    "session. Delegate exploration and verification to explorer/scanner "
                                     "(orchestration > Delegation).")
         self.assertEqual(json.loads(p.stdout)["hookSpecificOutput"]["hookEventName"], "PostToolUse")
 
