@@ -2,7 +2,7 @@
   "name": "claude-codex-orchestration",
   "description": "Marketplace for the orchestration plugin (Claude Code and Codex CLI).",
   "owner": {
-    "name": "OWNER"
+    "name": "0xRorschach"
   },
   "plugins": [
     {

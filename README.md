@@ -31,19 +31,19 @@ The full rule book is `skills/orchestration/SKILL.md`; the reasons behind the ru
 
 Pick one mode. Do not install both the plugin and the user-level copy: the skill and hooks would load twice. `install.sh` refuses to do that.
 
-What was measured: the local-clone path (`install.sh` in plugin and user-level mode, install and uninstall) in a temporary home inside a macOS sandbox without network. The GitHub source commands below (`OWNER/...`) were not measured.
+What was measured: the local-clone path (`install.sh` in plugin and user-level mode, install and uninstall) in a temporary home inside a macOS sandbox without network. The GitHub source commands below (`0xRorschach/...`) were not measured.
 
 ### Claude Code (native plugin)
 
 ```
-/plugin marketplace add OWNER/claude-codex-orchestration
+/plugin marketplace add 0xRorschach/claude-codex-orchestration
 /plugin install orchestration@claude-codex-orchestration
 ```
 
 From the shell:
 
 ```sh
-claude plugin install orchestration --marketplace OWNER/claude-codex-orchestration
+claude plugin install orchestration --marketplace 0xRorschach/claude-codex-orchestration
 ```
 
 Plugin agents appear with the plugin prefix: `orchestration:explorer`, `orchestration:worker`, `orchestration:researcher`, `orchestration:scanner`. The agent-type gate checks the last part, so these pass.
@@ -51,7 +51,7 @@ Plugin agents appear with the plugin prefix: `orchestration:explorer`, `orchestr
 ### Codex
 
 ```sh
-codex plugin marketplace add OWNER/claude-codex-orchestration
+codex plugin marketplace add 0xRorschach/claude-codex-orchestration
 codex plugin add orchestration@claude-codex-orchestration
 ```
 
@@ -60,7 +60,7 @@ Codex plugins cannot ship agent roles, so a Codex plugin user still needs a clon
 ### One step for both
 
 ```sh
-git clone https://github.com/OWNER/claude-codex-orchestration
+git clone https://github.com/0xRorschach/claude-codex-orchestration
 cd claude-codex-orchestration
 ./install.sh
 ```
@@ -212,21 +212,21 @@ Bu depo Claude Code ve Codex CLI için bir orkestrasyon skill'i, tipli alt ajanl
 Claude Code'a eklenti olarak kurmak için:
 
 ```
-/plugin marketplace add OWNER/claude-codex-orchestration
+/plugin marketplace add 0xRorschach/claude-codex-orchestration
 /plugin install orchestration@claude-codex-orchestration
 ```
 
 Codex'e eklenti olarak kurmak için:
 
 ```sh
-codex plugin marketplace add OWNER/claude-codex-orchestration
+codex plugin marketplace add 0xRorschach/claude-codex-orchestration
 codex plugin add orchestration@claude-codex-orchestration
 ```
 
 Codex eklentisi ajan rollerini taşıyamadığı için `codex/agents/*.toml` dosyalarını `~/.codex/agents/` klasörüne kopyalayın ya da iki aracı tek adımda kurun:
 
 ```sh
-git clone https://github.com/OWNER/claude-codex-orchestration
+git clone https://github.com/0xRorschach/claude-codex-orchestration
 cd claude-codex-orchestration
 ./install.sh
 ```
