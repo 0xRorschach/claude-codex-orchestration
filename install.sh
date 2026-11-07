@@ -30,7 +30,7 @@ AGENTS_SKILL="$HOME/.agents/skills/orchestration"
 CLAUDE_LINK="$CLAUDE_DIR/skills/orchestration"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-codex-orchestration"
 RECORD="$STATE_DIR/install-record.json"
-BACKUP_DIR="$STATE_DIR/backups/$(date +%Y%m%d-%H%M%S)"
+LOCK="$STATE_DIR/install.lock"
 
 MODE="plugin"
 DRY=0
@@ -90,6 +90,8 @@ command -v python3 >/dev/null 2>&1 || die "python3 not found: the hooks need Pyt
 PYV="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' \
   || die "python3 is $PYV: the hooks need Python 3.9 or newer"
+# Backup folder of this run: date, time, microseconds and pid, so two runs never share one.
+BACKUP_DIR="$STATE_DIR/backups/$(python3 -c 'import datetime; print(datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f"))')-$$"
 if [ "$MODE" != "uninstall" ] && python3 -c 'import sys; sys.exit(0 if sys.version_info < (3, 11) else 1)'; then
   warn "python3 is $PYV: the Codex version guard stays silent below 3.11 (no tomllib)"
 fi
@@ -111,7 +113,7 @@ fi
 # 3 = refused (would install twice), anything else = error (message already printed).
 helper() {
   OI_DRY="$DRY" OI_RECORD="$RECORD" OI_BACKUP_DIR="$BACKUP_DIR" OI_MODE="$MODE" OI_MARK="$HOOK_MARK" \
-    python3 - "$@" <<'PY'
+    OI_REPO="$REPO" OI_CLAUDE_DIR="$CLAUDE_DIR" OI_CODEX_DIR="$CODEX_DIR" python3 - "$@" <<'PY'
 import copy
 import hashlib
 import json
@@ -127,6 +129,9 @@ RECORD = os.environ["OI_RECORD"]
 BACKUP_DIR = os.environ["OI_BACKUP_DIR"]
 MODE = os.environ["OI_MODE"]
 MARK = os.environ["OI_MARK"]
+REPO = os.environ["OI_REPO"]
+CLAUDE_DIR = os.environ["OI_CLAUDE_DIR"]
+CODEX_DIR = os.environ["OI_CODEX_DIR"]
 CHANGED = 10
 
 
@@ -225,15 +230,46 @@ def load_hooks_file(path):
 
 
 # --- the install record -----------------------------------------------------------------------------------------
+# Required fields per item kind (type checked). "pending": true marks an item recorded before its write finished: a
+# run that stopped half way leaves it, and uninstall then removes the path only if it holds exactly our content.
+FIELDS = {
+    "file": {"path": str, "tool": str, "sha256": str},
+    "tree": {"path": str, "users": list, "sha256": str},
+    "link": {"path": str, "tool": str, "target": str},
+    "json": {"path": str, "tool": str, "event": str, "entry": dict},
+    "jsonfile": {"path": str, "tool": str},
+    "jsonkeys": {"path": str, "tool": str, "hooks": bool, "events": list},
+    "keep": {"path": str, "tool": str},
+    "dir": {"path": str},
+    "plugin": {"tool": str, "what": str, "id": str},
+}
+# Items that are bookkeeping only: when nothing else is left, the record goes.
+MINOR = ("dir", "keep", "jsonkeys")
+
+
 class Record:
     def __init__(self):
         self.exists = os.path.lexists(RECORD)
         if self.exists:
             data = load_object(RECORD, "install record")
             if data.get("version") != 1 or not isinstance(data.get("items"), list) \
-                    or not all(isinstance(i, dict) and "kind" in i for i in data["items"]):
+                    or not isinstance(data.get("modes", []), list) or not isinstance(data.get("tools", []), list):
                 raise Fail("cannot parse %s: not an install record of this script; fix or move it and rerun"
                            % RECORD)
+            data.setdefault("modes", [])
+            data.setdefault("tools", [])
+            for n, i in enumerate(data["items"]):
+                kind = i.get("kind") if isinstance(i, dict) else None
+                if kind not in FIELDS:
+                    raise Fail("cannot parse %s: item %d has no known kind; fix or move it and rerun" % (RECORD, n))
+                for field, typ in FIELDS[kind].items():
+                    if not isinstance(i.get(field), typ):
+                        raise Fail("cannot parse %s: item %d (%s) lacks a valid %r field; fix or move it and rerun"
+                                   % (RECORD, n, kind, field))
+                b = i.get("backup")
+                if b is not None and not (isinstance(b, dict) and b.get("type") in (None, "file", "dir", "symlink")):
+                    raise Fail("cannot parse %s: item %d (%s) has an invalid backup; fix or move it and rerun"
+                               % (RECORD, n, kind))
         else:
             data = {"version": 1, "modes": [], "tools": [], "items": []}
         self.data = data
@@ -261,14 +297,15 @@ class Record:
     def drop(self, item):
         self.items.remove(item)
 
-    def save(self, uninstall=False):
+    def save(self):
         if DRY or json.dumps(self.data, sort_keys=True) == self.before:
             return
-        if uninstall and not any(i["kind"] != "dir" for i in self.items):
-            # Only folders this script created but could not remove (something else lives in them) are left:
-            # nothing of ours remains, so the record goes.
+        if MODE == "uninstall" and all(i["kind"] in MINOR for i in self.items):
+            # Only bookkeeping is left (folders that something else now uses, notes about files that were there
+            # before the install): nothing of ours remains, so the record goes.
             if os.path.lexists(RECORD):
                 os.unlink(RECORD)
+            self.before = json.dumps(self.data, sort_keys=True)
             return
         self.data["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         self.data.setdefault("created", self.data["updated"])
@@ -276,19 +313,33 @@ class Record:
         atomic_write(RECORD, (json.dumps(self.data, indent=2, sort_keys=True) + "\n").encode(), 0o600)
         self.before = json.dumps(self.data, sort_keys=True)
 
+    def pending(self, item):
+        """Save item as pending before its write."""
+        item["pending"] = True
+        self.save()
+
+    def done(self, item):
+        item.pop("pending", None)
+        self.save()
+
 
 def ensure_dirs(path, tool, rec):
-    """Create path and missing parents; each folder created is recorded so uninstall can remove it if empty."""
+    """Create path and missing parents; each folder is recorded (and saved) before it is created, so uninstall can
+    remove it if it is empty, even after a run that stopped half way."""
     missing = []
     p = os.path.abspath(path)
     while not os.path.lexists(p):
         missing.append(p)
         p = os.path.dirname(p)
+    if not missing:
+        return
     for d in reversed(missing):
-        if not DRY:
-            os.mkdir(d)
         if rec.find("dir", d) is None:
             rec.add({"kind": "dir", "path": d, "tool": tool})
+    rec.save()
+    if not DRY:
+        for d in reversed(missing):
+            os.mkdir(d)
 
 
 # --- backups ----------------------------------------------------------------------------------------------------
@@ -368,10 +419,20 @@ def cmd_copy_file(src, dest, tool):
         data = f.read()
     new = sha_bytes(data)
     if regular_file(dest) and sha_file(dest) == new:
+        if item is not None and item.get("pending"):
+            rec.done(item)  # written by a run that stopped before it could confirm the write
+        elif item is None and rec.find("keep", dest) is None:
+            # Already there before the install and identical to ours: noted, so uninstall leaves it alone.
+            rec.add({"kind": "keep", "path": dest, "tool": tool})
+            rec.save()
         return 0
+    if os.path.isdir(dest) and not os.path.islink(dest):
+        raise Fail("%s is a directory, not a file; move it away and rerun" % dest)
     if os.path.lexists(dest):
         ours = item is not None and regular_file(dest) and sha_file(dest) == item.get("sha256")
-        if not ours:
+        if ours:
+            item["prev"] = item["sha256"]
+        else:
             info = backup(dest)
             if item is None:
                 item = {"kind": "file", "path": dest, "tool": tool, "backup": info}
@@ -381,18 +442,20 @@ def cmd_copy_file(src, dest, tool):
     elif item is None:
         item = {"kind": "file", "path": dest, "tool": tool, "backup": None}
         rec.add(item)
+    item["sha256"] = new
     if regular_file(dest):
         mode = stat.S_IMODE(os.stat(dest).st_mode)
     else:
         mode = stat.S_IMODE(os.stat(src).st_mode) & ~umask()
     if DRY:
         say("  [dry-run] copy %s -> %s" % (os.path.basename(src), dest))
-    else:
-        ensure_dirs(os.path.dirname(dest), tool, rec)
-        atomic_write(dest, data, mode)
-        say("  copied %s -> %s" % (os.path.basename(src), dest))
-    item["sha256"] = new
-    rec.save()
+        return CHANGED
+    ensure_dirs(os.path.dirname(dest), tool, rec)
+    rec.pending(item)
+    atomic_write(dest, data, mode)
+    say("  copied %s -> %s" % (os.path.basename(src), dest))
+    item.pop("prev", None)
+    rec.done(item)
     return CHANGED
 
 
@@ -406,35 +469,42 @@ def cmd_copy_tree(src, dest, *users):
         for u in users:
             if u not in item["users"]:
                 item["users"].append(u)
+        item.pop("pending", None)
+        item.pop("prev", None)
         rec.save()
         say("  already installed (%s)" % dest)
         return 0
     if item is None:
         item = {"kind": "tree", "path": dest, "users": [], "backup": None}
         rec.add(item)
-    elif os.path.lexists(dest) and not (os.path.isdir(dest) and tree_sha(dest) == item.get("sha256")):
-        backup(dest)
-        warn("%s was changed after install; that version was backed up before the update" % dest)
+    elif os.path.lexists(dest):
+        if os.path.isdir(dest) and tree_sha(dest) == item.get("sha256"):
+            item["prev"] = item["sha256"]
+        else:
+            backup(dest)
+            warn("%s was changed after install; that version was backed up before the update" % dest)
     for u in users:
         if u not in item["users"]:
             item["users"].append(u)
+    item["sha256"] = new
     if DRY:
         say("  [dry-run] copy skill -> %s" % dest)
-    else:
-        parent = os.path.dirname(dest)
-        ensure_dirs(parent, "shared", rec)
-        tmpdir = tempfile.mkdtemp(dir=parent, prefix=".orchestration-install.")
-        try:
-            staged = os.path.join(tmpdir, "new")
-            shutil.copytree(src, staged, symlinks=True, ignore=shutil.ignore_patterns("__pycache__"))
-            if os.path.lexists(dest):
-                os.rename(dest, os.path.join(tmpdir, "old"))
-            os.rename(staged, dest)
-        finally:
-            shutil.rmtree(tmpdir, ignore_errors=True)
-        say("  copied skill -> %s" % dest)
-    item["sha256"] = new
-    rec.save()
+        return CHANGED
+    parent = os.path.dirname(dest)
+    ensure_dirs(parent, "shared", rec)
+    rec.pending(item)
+    tmpdir = tempfile.mkdtemp(dir=parent, prefix=".orchestration-install.")
+    try:
+        staged = os.path.join(tmpdir, "new")
+        shutil.copytree(src, staged, symlinks=True, ignore=shutil.ignore_patterns("__pycache__"))
+        if os.path.lexists(dest):
+            os.rename(dest, os.path.join(tmpdir, "old"))
+        os.rename(staged, dest)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    say("  copied skill -> %s" % dest)
+    item.pop("prev", None)
+    rec.done(item)
     return CHANGED
 
 
@@ -446,68 +516,125 @@ def cmd_link(link, target, tool):
             # Points exactly at our recorded skill copy: count it as ours, with nothing to restore.
             rec.add({"kind": "link", "path": link, "target": target, "tool": tool, "backup": None})
             rec.save()
+        elif item.get("pending"):
+            rec.done(item)
         return 0
-    info = None
-    if os.path.lexists(link):
-        info = backup(link)
-        if not DRY:
-            remove_path(link)
+    info = backup(link) if os.path.lexists(link) else None
     if item is None:
         item = {"kind": "link", "path": link, "tool": tool, "backup": info}
         rec.add(item)
     item["target"] = target
     if DRY:
         say("  [dry-run] link %s -> %s" % (link, target))
-    else:
-        ensure_dirs(os.path.dirname(link), tool, rec)
-        os.symlink(target, link)
-        say("  linked %s -> %s" % (link, target))
-    rec.save()
+        return CHANGED
+    ensure_dirs(os.path.dirname(link), tool, rec)
+    rec.pending(item)
+    if os.path.lexists(link):
+        remove_path(link)
+    os.symlink(target, link)
+    say("  linked %s -> %s" % (link, target))
+    rec.done(item)
     return CHANGED
 
 
-def write_hooks_file(path, data):
-    """Atomic write that keeps the file's mode (a new file gets 0666 minus umask). A symlinked config file (a
-    dotfiles repo, say) is written through to the file it points to, so the link stays."""
+def json_format(path):
+    """(indent, trailing newline) of an existing JSON file: the indent of its first indented line, else 2."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return 2, True
+    for line in text.splitlines()[1:]:
+        body = line.lstrip(" \t")
+        if body and len(body) < len(line):
+            lead = line[:len(line) - len(body)]
+            return ("\t" if lead.startswith("\t") else len(lead)), text.endswith("\n")
+    return 2, text.endswith("\n")
+
+
+def check_json_target(path):
+    if os.path.islink(path) and not os.path.exists(path):
+        raise Fail("%s is a broken symlink; fix it and rerun" % path)
+    if os.path.isdir(path):
+        raise Fail("%s is a directory, not a file; move it away and rerun" % path)
+
+
+def write_hooks_file(path, data, fmt):
+    """Atomic write that keeps the file's mode (a new file gets 0666 minus umask), indent and final newline, and
+    writes non-ASCII text as is. A symlinked config file (a dotfiles repo, say) is written through to the file it
+    points to, so the link stays."""
+    check_json_target(path)
     real = os.path.realpath(path)
     mode = stat.S_IMODE(os.stat(real).st_mode) if os.path.exists(real) else 0o666 & ~umask()
-    atomic_write(real, (json.dumps(data, indent=2) + "\n").encode(), mode)
+    indent, newline = fmt
+    text = json.dumps(data, indent=indent, ensure_ascii=False) + ("\n" if newline else "")
+    atomic_write(real, text.encode("utf-8"), mode)
 
 
 def cmd_json_merge(path, frag, tool):
     rec = Record()
-    existed = os.path.exists(path)
+    check_json_target(path)
+    existed = os.path.lexists(path)
     data = load_hooks_file(path) if existed else {}
+    fmt = json_format(path) if existed else (2, True)
     with open(frag, encoding="utf-8") as f:
         add = json.load(f)["hooks"]
     had_hooks = "hooks" in data
     hooks = data.setdefault("hooks", {})
-    added = []
+    ours = [(i["event"], i["entry"]) for i in rec.items if i["kind"] == "json" and i["path"] == path]
+    kept = [(i.get("event"), i.get("entry")) for i in rec.items if i["kind"] == "keep" and i["path"] == path]
+    added, created_events, keep = [], [], []
     for event, groups in add.items():
+        had_event = event in hooks
         cur = hooks.setdefault(event, [])
-        have = {h.get("command") for g in cur for h in g.get("hooks") or []}
         for g in groups:
-            if not any(h["command"] in have for h in g["hooks"]):
+            cmds = {h["command"] for h in g["hooks"]}
+            clash = [c for c in cur if cmds & {h.get("command") for h in c.get("hooks") or []}]
+            if not clash:
                 cur.append(copy.deepcopy(g))
                 added.append((event, g))
+                continue
+            # The command is already registered: by an earlier run of ours, or by the user. A user entry is noted,
+            # so uninstall (and its sweep of leftover entries) leaves it alone.
+            for c in clash:
+                if (event, c) not in ours and (event, c) not in kept and (event, c) not in keep:
+                    keep.append((event, c))
+        if cur and not had_event:
+            created_events.append(event)
         if not cur:
             del hooks[event]
     if not had_hooks and not hooks:
         del data["hooks"]
+    for event, c in keep:
+        rec.add({"kind": "keep", "path": path, "tool": tool, "event": event, "entry": copy.deepcopy(c)})
     if not added:
+        rec.save()
         return 0
     if existed:
         backup(path)
+    items = []
     for event, g in added:
-        rec.add({"kind": "json", "path": path, "tool": tool, "event": event, "entry": g})
+        items.append({"kind": "json", "path": path, "tool": tool, "event": event, "entry": g})
+        rec.add(items[-1])
+    keys = rec.find("jsonkeys", path)
+    if keys is None:
+        keys = {"kind": "jsonkeys", "path": path, "tool": tool, "hooks": False, "events": []}
+        rec.add(keys)
+    keys["hooks"] = keys["hooks"] or not had_hooks
+    keys["events"] += [e for e in created_events if e not in keys["events"]]
     if not existed and rec.find("jsonfile", path) is None:
         rec.add({"kind": "jsonfile", "path": path, "tool": tool})
     if DRY:
         say("  [dry-run] merge our hook entries in %s" % path)
-    else:
-        ensure_dirs(os.path.dirname(path), tool, rec)
-        write_hooks_file(path, data)
-        say("  merged our hook entries in %s" % path)
+        return CHANGED
+    ensure_dirs(os.path.dirname(path), tool, rec)
+    for i in items:
+        i["pending"] = True
+    rec.save()
+    write_hooks_file(path, data, fmt)
+    say("  merged our hook entries in %s" % path)
+    for i in items:
+        i.pop("pending", None)
     rec.save()
     return CHANGED
 
@@ -519,29 +646,38 @@ def cmd_ensure_dir(path, tool):
     if DRY:
         say("  [dry-run] mkdir -p %s" % path)
     ensure_dirs(path, tool, rec)
-    rec.save()
     return CHANGED
 
 
 # --- uninstall --------------------------------------------------------------------------------------------------
-def remove_json_entries(path, entries):
-    """Remove each entry (event, group) from path once, comparing whole groups. Returns (changed, missing)."""
-    data = load_hooks_file(path)
+def remove_json_entries(data, entries):
+    """Remove each entry (event, group) from data once, comparing whole groups. Returns (removed, indexes of the
+    entries not found, touched events)."""
     hooks = data.get("hooks") or {}
-    removed, missing = 0, []
-    for event, entry in entries:
+    removed, missing, touched = 0, [], set()
+    for n, (event, entry) in enumerate(entries):
         lst = hooks.get(event) or []
         idx = next((k for k, g in enumerate(lst) if g == entry), None)
         if idx is None:
-            missing.append(event)
+            missing.append(n)
             continue
         del lst[idx]
         removed += 1
-        if not lst:
+        touched.add(event)
+    return removed, missing, touched
+
+
+def drop_empty_keys(data, touched, keys):
+    """Delete the event lists (and the "hooks" object) this uninstall emptied. With a jsonkeys note, only those the
+    install created go: an empty "hooks": {} that was there before stays."""
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return
+    for event in list(hooks):
+        if hooks[event] == [] and event in touched and (keys is None or event in keys["events"]):
             del hooks[event]
-    if removed and "hooks" in data and not data["hooks"]:
+    if not hooks and touched and (keys is None or keys["hooks"]):
         del data["hooks"]
-    return data, removed, missing
 
 
 def remove_then_restore(path, info):
@@ -550,9 +686,85 @@ def remove_then_restore(path, info):
         if info and info.get("type"):
             say("  [dry-run] restore %s" % path)
         return
-    os.unlink(path)
+    remove_path(path)
     say("  removed %s" % path)
     restore(path, info)
+
+
+def repo_targets(rec, scope):
+    """(src, dest) pairs and (json file, fragment) pairs this record's modes install, limited to scope."""
+    files, jsons = [], []
+    modes = rec.data["modes"]
+    if "claude" in scope and "user" in modes:
+        for n in sorted(os.listdir(os.path.join(REPO, "agents"))):
+            if n.endswith(".md"):
+                files.append((os.path.join(REPO, "agents", n), os.path.join(CLAUDE_DIR, "agents", n)))
+        jsons.append((os.path.join(CLAUDE_DIR, "settings.json"),
+                      os.path.join(REPO, "skills/orchestration/hooks/settings-parcasi.json")))
+    if "codex" in scope and ("user" in modes or "plugin" in modes):
+        for n in sorted(os.listdir(os.path.join(REPO, "codex", "agents"))):
+            if n.endswith(".toml"):
+                files.append((os.path.join(REPO, "codex", "agents", n), os.path.join(CODEX_DIR, "agents", n)))
+        if "user" in modes:
+            jsons.append((os.path.join(CODEX_DIR, "hooks.json"),
+                          os.path.join(REPO, "skills/orchestration/hooks/codex-parcasi.json")))
+    return files, jsons
+
+
+def sweep(rec, scope, recorded):
+    """Record mode: remove leftovers the record does not list (a run that stopped before it could record them, or
+    an older install) when they are exactly ours: byte-identical copies, and hook entries whose command is one of
+    ours. Anything noted as there before the install is left alone. Each removal is warned about."""
+    changed = False
+    files, jsons = repo_targets(rec, scope)
+    keep_paths = {i["path"] for i in rec.items if i["kind"] == "keep" and "event" not in i}
+    for src, dest in files:
+        if dest in recorded or dest in keep_paths or not regular_file(dest) or sha_file(dest) != sha_file(src):
+            continue
+        warn("%s is not in the install record but is identical to this repo's copy: removed" % dest)
+        if not DRY:
+            os.unlink(dest)
+        changed = True
+    for path, frag in jsons:
+        if not os.path.exists(path):
+            continue
+        with open(frag, encoding="utf-8") as f:
+            cmds = {h["command"] for gs in json.load(f)["hooks"].values() for g in gs for h in g["hooks"]}
+        kept = [(i["event"], i["entry"]) for i in rec.items if i["kind"] == "keep" and i["path"] == path
+                and "event" in i]
+        try:
+            data = load_hooks_file(path)
+        except Fail as e:
+            warn("%s; leftover hook entries there were not checked" % e)
+            continue
+        hooks = data.get("hooks") or {}
+        removed = 0
+        for event in list(hooks):
+            out, here = [], 0
+            for g in hooks[event]:
+                if (event, g) in kept:
+                    out.append(g)
+                    continue
+                hs = [h for h in g.get("hooks") or [] if h.get("command") not in cmds]
+                here += len(g.get("hooks") or []) - len(hs)
+                if hs:
+                    out.append(dict(g, hooks=hs))
+            hooks[event] = out
+            if not out and here:
+                del hooks[event]
+            removed += here
+        if not removed:
+            continue
+        if "hooks" in data and not data["hooks"]:
+            del data["hooks"]
+        warn("%s: %d hook entr%s running this repo's hooks %s not in the install record: removed"
+             % (path, removed, "y" if removed == 1 else "ies", "was" if removed == 1 else "were"))
+        changed = True
+        if not DRY:
+            fmt = json_format(path)
+            backup(path)
+            write_hooks_file(path, data, fmt)
+    return changed
 
 
 def cmd_uninstall_recorded(*scope):
@@ -561,13 +773,17 @@ def cmd_uninstall_recorded(*scope):
         return 0
     changed = False
     in_scope = lambda i: i.get("tool") in scope
+    recorded = {i["path"] for i in rec.items if i["kind"] == "file"}
     for item in [i for i in rec.items if i["kind"] == "file" and in_scope(i)]:
         p = item["path"]
+        ok = [item.get("sha256")] + ([item["prev"]] if item.get("prev") else [])
         if not os.path.lexists(p):
             changed |= restore(p, item.get("backup"))
-        elif regular_file(p) and sha_file(p) == item.get("sha256"):
+        elif regular_file(p) and sha_file(p) in ok:
             remove_then_restore(p, item.get("backup"))
             changed = True
+        elif item.get("pending"):
+            pass  # the run stopped before writing: what is there is still the original
         else:
             warn("%s was changed after install: left in place" % p)
             if item.get("backup") and item["backup"].get("type"):
@@ -581,7 +797,7 @@ def cmd_uninstall_recorded(*scope):
             changed = True
         elif not os.path.lexists(p):
             changed |= restore(p, item.get("backup"))
-        else:
+        elif not item.get("pending"):
             warn("%s no longer points to %s: left in place" % (p, item["target"]))
         rec.drop(item)
     for item in [i for i in rec.items if i["kind"] == "tree"]:
@@ -590,40 +806,45 @@ def cmd_uninstall_recorded(*scope):
         if item["users"]:
             continue
         p = item["path"]
+        ok = [item.get("sha256")] + ([item["prev"]] if item.get("prev") else [])
         if not os.path.lexists(p):
             pass
-        elif os.path.isdir(p) and not os.path.islink(p) and tree_sha(p) == item.get("sha256"):
+        elif os.path.isdir(p) and not os.path.islink(p) and tree_sha(p) in ok:
             if DRY:
                 say("  [dry-run] remove %s" % p)
             else:
                 shutil.rmtree(p)
                 say("  removed %s" % p)
             changed = True
-        else:
+        elif not item.get("pending"):
             warn("%s was changed after install: left in place" % p)
         rec.drop(item)
     files = []
     for i in rec.items:
-        if i["kind"] in ("json", "jsonfile") and in_scope(i) and i["path"] not in files:
+        if i["kind"] in ("json", "jsonfile", "jsonkeys") and in_scope(i) and i["path"] not in files:
             files.append(i["path"])
     for path in files:
         mine = [i for i in rec.items if i["kind"] == "json" and i["path"] == path and in_scope(i)]
         created = next((i for i in rec.items if i["kind"] == "jsonfile" and i["path"] == path), None)
-        if not os.path.exists(path):
-            for i in mine:
-                rec.drop(i)
-            if created:
-                rec.drop(created)
-            continue
-        data, removed, missing = remove_json_entries(path, [(i["event"], i["entry"]) for i in mine])
-        for event in missing:
-            warn("our %s hook entry in %s was changed or removed after install: left as is" % (event, path))
+        keys = next((i for i in rec.items if i["kind"] == "jsonkeys" and i["path"] == path), None)
         for i in mine:
             rec.drop(i)
-        drop_file = created is not None and data == {} \
-            and not any(i["kind"] == "json" and i["path"] == path for i in rec.items)
-        if created is not None and not any(i["kind"] == "json" and i["path"] == path for i in rec.items):
-            rec.drop(created)
+        last = not any(i["kind"] == "json" and i["path"] == path for i in rec.items)
+        if last:
+            for i in (created, keys):
+                if i is not None:
+                    rec.drop(i)
+        if not os.path.exists(path):
+            continue
+        data = load_hooks_file(path)
+        fmt = json_format(path)
+        removed, missing, touched = remove_json_entries(data, [(i["event"], i["entry"]) for i in mine])
+        for n in missing:
+            if not mine[n].get("pending"):
+                warn("our %s hook entry in %s was changed or removed after install: left as is"
+                     % (mine[n]["event"], path))
+        drop_empty_keys(data, touched, keys)
+        drop_file = created is not None and last and data == {}
         if not removed and not drop_file:
             continue
         changed = True
@@ -635,8 +856,11 @@ def cmd_uninstall_recorded(*scope):
             os.unlink(path)
             say("  removed our hook entries from %s (the file was created by this script: removed)" % path)
         else:
-            write_hooks_file(path, data)
+            write_hooks_file(path, data, fmt)
             say("  removed our hook entries from %s" % path)
+    changed |= sweep(rec, scope, recorded)
+    for item in [i for i in rec.items if i["kind"] == "keep" and in_scope(i)]:
+        rec.drop(item)
     for item in sorted([i for i in rec.items if i["kind"] == "dir"], key=lambda i: -i["path"].count(os.sep)):
         p = item["path"]
         if not os.path.isdir(p) or os.path.islink(p):
@@ -646,7 +870,7 @@ def cmd_uninstall_recorded(*scope):
                 os.rmdir(p)
             rec.drop(item)
             changed = True
-    rec.save(uninstall=True)
+    rec.save()
     return CHANGED if changed else 0
 
 
@@ -681,28 +905,38 @@ def cmd_legacy_json_remove(path, frag):
         if left:
             warn("%s has hook entries that run %s scripts but differ from this repo's: left in place" % (path, MARK))
         return 0
-    data, removed, _ = remove_json_entries(path, entries)
+    fmt = json_format(path)
+    removed, _, touched = remove_json_entries(data, entries)
+    drop_empty_keys(data, touched, None)
     if DRY:
         say("  [dry-run] remove our hook entries from %s" % path)
         return CHANGED
     backup(path)
-    write_hooks_file(path, data)
+    write_hooks_file(path, data, fmt)
     say("  removed our hook entries from %s" % path)
     return CHANGED
 
 
 # --- queries (exit 0 = yes, 1 = no) and record edits ------------------------------------------------------------
-def cmd_preflight(*paths):
+def cmd_preflight(*targets):
+    """Read-only checks before the first write: the record parses, each json:PATH is a readable hooks file (or
+    absent), and no file:PATH is a directory."""
     Record()
-    for p in paths:
-        if os.path.exists(p):
-            load_hooks_file(p)
+    for t in targets:
+        kind, _, p = t.partition(":")
+        if kind == "json":
+            check_json_target(p)
+            if os.path.exists(p):
+                load_hooks_file(p)
+        elif os.path.isdir(p) and not os.path.islink(p):
+            raise Fail("%s is a directory, not a file; move it away and rerun" % p)
     return 0
 
 
 def cmd_record_json_paths(*scope):
     rec = Record()
-    for p in sorted({i["path"] for i in rec.items if i["kind"] in ("json", "jsonfile") and i.get("tool") in scope}):
+    kinds = ("json", "jsonfile", "jsonkeys")
+    for p in sorted({i["path"] for i in rec.items if i["kind"] in kinds and i.get("tool") in scope}):
         print(p)
     return 0
 
@@ -720,12 +954,17 @@ def cmd_has_plugin(tool, what):
     return 0 if any(i["kind"] == "plugin" and i["tool"] == tool and i["what"] == what for i in rec.items) else 1
 
 
-def cmd_add_plugin(tool, what, ident):
+def cmd_add_plugin(tool, what, ident, state):
+    """state "pending" before the tool command, "done" after it succeeded."""
     rec = Record()
-    if any(i["kind"] == "plugin" and i["tool"] == tool and i["what"] == what for i in rec.items):
-        return 0
-    rec.add({"kind": "plugin", "tool": tool, "what": what, "id": ident})
-    rec.save()
+    item = next((i for i in rec.items if i["kind"] == "plugin" and i["tool"] == tool and i["what"] == what), None)
+    if item is None:
+        item = {"kind": "plugin", "tool": tool, "what": what, "id": ident}
+        rec.add(item)
+    if state == "pending":
+        rec.pending(item)
+    else:
+        rec.done(item)
     return 0
 
 
@@ -737,13 +976,23 @@ def cmd_drop_plugin(tool, what):
     return 0
 
 
+def cmd_legacy_found(*roles):
+    """No record: is any of our role files (src:dest pairs) present byte-identical? Exit 0 = yes, prints the path."""
+    for pair in roles:
+        src, _, dest = pair.partition(":")
+        if regular_file(dest) and sha_file(dest) == sha_file(src):
+            print(dest)
+            return 0
+    return 1
+
+
 COMMANDS = {
     "copy-file": cmd_copy_file, "copy-tree": cmd_copy_tree, "link": cmd_link, "json-merge": cmd_json_merge,
     "ensure-dir": cmd_ensure_dir, "uninstall-recorded": cmd_uninstall_recorded,
     "legacy-remove-file": cmd_legacy_remove_file, "legacy-json-remove": cmd_legacy_json_remove,
     "preflight": cmd_preflight, "record-json-paths": cmd_record_json_paths, "owned": cmd_owned,
     "has-user-level": cmd_has_user_level, "has-plugin": cmd_has_plugin, "add-plugin": cmd_add_plugin,
-    "drop-plugin": cmd_drop_plugin,
+    "drop-plugin": cmd_drop_plugin, "legacy-found": cmd_legacy_found,
 }
 
 try:
@@ -840,6 +1089,22 @@ install_plugin() {
     exit 3
   fi
   legacy_blocker
+  if ! exists "$RECORD"; then
+    # Plugin, marketplace or one of our role files without a record: an install by an older version of this
+    # script. Installing over it would leave those parts invisible to --uninstall.
+    local found=""
+    if plugin_present; then
+      found="the $PLUGIN_ID plugin or its marketplace"
+    else
+      local pairs=() r
+      for r in "$REPO"/codex/agents/*.toml; do pairs+=("$r:$CODEX_DIR/agents/$(basename "$r")"); done
+      found="$(helper legacy-found "${pairs[@]}" || true)"
+    fi
+    if [ -n "$found" ]; then
+      warn "found an install without a record: run ./install.sh --uninstall first ($found)"
+      exit 3
+    fi
+  fi
   if exists "$CLAUDE_LINK"; then
     warn "$CLAUDE_LINK: not installed by this script; move it away. With the plugin as well, the skill would load twice."
     exit 3
@@ -858,11 +1123,13 @@ install_plugin() {
       say "  already installed ($PLUGIN_ID)"
     else
       if ! claude_marketplace_known; then
+        [ "$DRY" = 1 ] || py add-plugin claude marketplace "$MARKETPLACE" pending
         run_tool "claude plugin marketplace add" claude plugin marketplace add "$REPO"
-        [ "$DRY" = 1 ] || py add-plugin claude marketplace "$MARKETPLACE"
+        [ "$DRY" = 1 ] || py add-plugin claude marketplace "$MARKETPLACE" done
       fi
+      [ "$DRY" = 1 ] || py add-plugin claude plugin "$PLUGIN_ID" pending
       run_tool "claude plugin install" claude plugin install "$PLUGIN_ID"
-      [ "$DRY" = 1 ] || py add-plugin claude plugin "$PLUGIN_ID"
+      [ "$DRY" = 1 ] || py add-plugin claude plugin "$PLUGIN_ID" done
     fi
   fi
   if [ "$HAVE_CODEX" = 1 ]; then
@@ -873,11 +1140,13 @@ install_plugin() {
       # codex refuses to start when CODEX_HOME is set to a folder that does not exist yet.
       py ensure-dir "$CODEX_DIR" codex
       if ! codex_marketplace_known; then
+        [ "$DRY" = 1 ] || py add-plugin codex marketplace "$MARKETPLACE" pending
         run_tool "codex plugin marketplace add" codex plugin marketplace add "$REPO"
-        [ "$DRY" = 1 ] || py add-plugin codex marketplace "$MARKETPLACE"
+        [ "$DRY" = 1 ] || py add-plugin codex marketplace "$MARKETPLACE" done
       fi
+      [ "$DRY" = 1 ] || py add-plugin codex plugin "$PLUGIN_ID" pending
       run_tool "codex plugin add" codex plugin add "$PLUGIN_ID"
-      [ "$DRY" = 1 ] || py add-plugin codex plugin "$PLUGIN_ID"
+      [ "$DRY" = 1 ] || py add-plugin codex plugin "$PLUGIN_ID" done
     fi
     copy_set "$REPO/codex/agents" '*.toml' "$CODEX_DIR/agents" codex
   fi
@@ -1019,33 +1288,79 @@ legacy_anything() {
   return 1
 }
 
+# --- lock ------------------------------------------------------------------------------------------------------
+# One run at a time per state folder: mkdir is atomic. The lock holds the pid; a lock whose process is gone is stale
+# and is taken over. Folders created only to hold the lock are removed again on exit when still empty.
+LOCK_HELD=0
+LOCK_MADE=()
+release_lock() {
+  [ "$LOCK_HELD" = 1 ] && rm -rf "$LOCK"
+  local i
+  for ((i = ${#LOCK_MADE[@]} - 1; i >= 0; i--)); do rmdir "${LOCK_MADE[$i]}" 2>/dev/null || break; done
+  return 0
+}
+take_lock() {
+  local d="$STATE_DIR"
+  while ! exists "$d"; do LOCK_MADE=("$d" ${LOCK_MADE[@]+"${LOCK_MADE[@]}"}); d="$(dirname "$d")"; done
+  trap release_lock EXIT
+  if ! exists "$STATE_DIR"; then
+    { mkdir -p "$STATE_DIR" && chmod 700 "$STATE_DIR"; } || die "cannot create $STATE_DIR"
+  fi
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    local pid
+    pid="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      warn "removing a stale lock left by process $pid ($LOCK)"
+      rm -rf "$LOCK"
+      mkdir "$LOCK" 2>/dev/null || die "another install.sh is running (lock: $LOCK)"
+    else
+      die "another install.sh is running (lock: $LOCK)"
+    fi
+  fi
+  LOCK_HELD=1
+  printf '%s\n' "$$" > "$LOCK/pid"
+}
+
 # --- main ------------------------------------------------------------------------------------------------------
-# Every check that can refuse runs before the first write: a broken settings.json, hooks.json or install record
-# stops here with exit 1 and nothing changed.
+# Every check that can refuse runs before the first write: a broken or symlink-broken settings.json / hooks.json,
+# a broken install record, or a folder where a file goes stops here with exit 1 and nothing changed.
 PREFLIGHT=()
+add_targets() { # add_targets SRCDIR GLOB DESTDIR: the files a copy_set would write
+  local f
+  for f in "$1"/$2; do PREFLIGHT+=("file:$3/$(basename "$f")"); done
+}
 if [ "$MODE" = "user" ]; then
-  [ "$HAVE_CLAUDE" = 1 ] && PREFLIGHT+=("$CLAUDE_DIR/settings.json")
-  [ "$HAVE_CODEX" = 1 ] && PREFLIGHT+=("$CODEX_DIR/hooks.json")
+  if [ "$HAVE_CLAUDE" = 1 ]; then
+    PREFLIGHT+=("json:$CLAUDE_DIR/settings.json")
+    add_targets "$REPO/agents" '*.md' "$CLAUDE_DIR/agents"
+  fi
+  if [ "$HAVE_CODEX" = 1 ]; then
+    PREFLIGHT+=("json:$CODEX_DIR/hooks.json")
+    add_targets "$REPO/codex/agents" '*.toml' "$CODEX_DIR/agents"
+  fi
+elif [ "$MODE" = "plugin" ]; then
+  [ "$HAVE_CODEX" = 1 ] && add_targets "$REPO/codex/agents" '*.toml' "$CODEX_DIR/agents"
 elif [ "$MODE" = "uninstall" ]; then
-  if [ -e "$RECORD" ] || [ -L "$RECORD" ]; then
+  if exists "$RECORD"; then
     py preflight
     SCOPE=()
     [ "$WANT_CLAUDE" = 1 ] && SCOPE+=(claude)
     [ "$WANT_CODEX" = 1 ] && SCOPE+=(codex)
-    while IFS= read -r f; do PREFLIGHT+=("$f"); done < <(helper record-json-paths "${SCOPE[@]}")
+    while IFS= read -r f; do PREFLIGHT+=("json:$f"); done < <(helper record-json-paths "${SCOPE[@]}")
   else
-    [ "$WANT_CLAUDE" = 1 ] && PREFLIGHT+=("$CLAUDE_DIR/settings.json")
-    [ "$WANT_CODEX" = 1 ] && PREFLIGHT+=("$CODEX_DIR/hooks.json")
+    [ "$WANT_CLAUDE" = 1 ] && PREFLIGHT+=("json:$CLAUDE_DIR/settings.json")
+    [ "$WANT_CODEX" = 1 ] && PREFLIGHT+=("json:$CODEX_DIR/hooks.json")
   fi
 fi
 py preflight ${PREFLIGHT[@]+"${PREFLIGHT[@]}"}
+[ "$DRY" = 1 ] || take_lock
 
 [ "$DRY" = 1 ] && say "Dry run: nothing will be written."
 case "$MODE" in
   plugin) install_plugin ;;
   user) install_user ;;
   uninstall)
-    if [ -e "$RECORD" ] || [ -L "$RECORD" ]; then
+    if exists "$RECORD"; then
       uninstall_recorded
     elif legacy_anything; then
       warn "no install record at $RECORD (installed by an older version of this script?): removing only files"

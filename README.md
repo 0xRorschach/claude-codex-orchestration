@@ -86,26 +86,28 @@ Exit codes:
 | Code | Meaning |
 |---|---|
 | `0` | Done, or nothing to do. |
-| `1` | Missing prerequisite (neither `claude` nor `codex` found, Python below 3.9); a `settings.json`, `hooks.json` or install record that does not parse (`cannot parse <file>: <error>; fix or move it and rerun`, checked before anything is written); or a failed `claude` / `codex` command (`claude plugin install failed (exit N)`). |
+| `1` | Missing prerequisite (neither `claude` nor `codex` found, Python below 3.9); a `settings.json`, `hooks.json` or install record that does not parse (`cannot parse <file>: <error>; fix or move it and rerun`, checked before anything is written); a failed `claude` / `codex` command (`claude plugin install failed (exit N)`); a `settings.json` / `hooks.json` that is a broken symlink, or a folder where a file goes (both checked before anything is written); another `install.sh` running at the same time (`another install.sh is running (lock: <path>)`); or a file system error (for example a folder without write permission). |
 | `2` | Usage error (unknown option, or `--claude-only` with `--codex-only`). |
 | `3` | Would install twice (plugin and user-level copy together), or a path this script did not install is in the way: the message names the path and says to run `./install.sh --uninstall` or to move it away (`not installed by this script; move it away`). |
 
 ### Install record and uninstall
 
-Every install writes `${XDG_STATE_HOME:-~/.local/state}/claude-codex-orchestration/install-record.json` (mode 0600). It lists the mode and tools, every file and folder the script created with its sha256, the skill copy (with a checksum of the whole folder and which tools use it), the Claude skills link, each hook entry it added to `settings.json` / `hooks.json` (the whole entry), the plugins and marketplaces it registered, and for every file it replaced the backup: path, original type, mode and, for a symlink, the link target. Backups go to `backups/<date-time>/<original absolute path>` next to the record (folder mode 0700).
+Every install writes `${XDG_STATE_HOME:-~/.local/state}/claude-codex-orchestration/install-record.json` (mode 0600). It lists the mode and tools, every file and folder the script created with its sha256, the skill copy (with a checksum of the whole folder and which tools use it), the Claude skills link, each hook entry it added to `settings.json` / `hooks.json` (the whole entry), the plugins and marketplaces it registered, and for every file it replaced the backup: path, original type, mode and, for a symlink, the link target. Backups go to `backups/<date>-<time>-<microseconds>-<pid>/<original absolute path>` next to the record (folder mode 0700). Each item is recorded as pending before it is written and confirmed after, so a run that stops half way still leaves a record that `--uninstall` can act on. While a run is active it holds a lock folder, `install.lock`, in the same place; a lock left by a process that no longer runs is taken over.
 
 `--uninstall` removes only what the record lists, and only while it is unchanged:
 
 - A file or skill copy whose checksum no longer matches (you edited it) is left in place with a warning.
 - A file the install replaced is put back from its backup, with its mode; a replaced symlink comes back as the same link.
-- Only the hook entries the install added are taken out; an identical entry that was already there before the install stays.
+- Only the hook entries the install added are taken out; an identical entry that was already there before the install stays, and so does a file that was already identical to ours.
+- A pending item (from a run that stopped half way) is removed only if it holds exactly our content; otherwise it is the original and stays.
+- Leftovers the record does not list (from such a run, or from an older install) are removed with a warning when they are exactly ours: files byte-identical to this repository's copies, and hook entries whose command is one of this repository's hook commands.
 - Folders the install created are removed when empty. When nothing is left, the record itself is removed.
 - `--claude-only` / `--codex-only` limit the uninstall to one tool. The shared skill copy in `~/.agents/skills/orchestration` goes when the last tool that uses it is uninstalled.
-- An existing symlink at a copied file (say `~/.codex/agents/worker.toml` pointing into a dotfiles folder) is replaced by the file itself; the file it pointed to is never written. A symlinked `settings.json` / `hooks.json` is written through, so the link stays. Rewritten JSON files keep their mode.
+- An existing symlink at a copied file (say `~/.codex/agents/worker.toml` pointing into a dotfiles folder) is replaced by the file itself; the file it pointed to is never written. A symlinked `settings.json` / `hooks.json` is written through, so the link stays. Rewritten JSON files keep their mode, their indent (2 when it cannot be read from the file) and their final newline, and non-ASCII text stays as it is; a `"hooks": {}` or event list that was there before the install stays after uninstall, while the ones the install created go.
 
 After `git pull`: plugin mode needs the update step below; in `--user-level` mode run `./install.sh --user-level` again, which updates the recorded copy. `--uninstall` judges the skill copy against the checksum recorded at install, not against the current clone, so it still removes the copy after a `git pull` as long as you did not edit it.
 
-Upgrading from an install without a record (made by an earlier version of `install.sh`): installing again stops with exit 3 and names the path. Run `./install.sh --uninstall` first. Without a record it is conservative: it removes only files byte-identical to this repository's copies and hook entries identical to ours, and warns about the rest. Then install again.
+Upgrading from an install without a record (made by an earlier version of `install.sh`): installing again stops with exit 3 and names what it found. In plugin mode that is the plugin or its marketplace already registered in Claude Code or Codex, or one of this repository's Codex roles in `~/.codex/agents` (`found an install without a record: run ./install.sh --uninstall first`). In `--user-level` mode it is the skill copy in `~/.agents/skills/orchestration` or the Claude skills link to it; an installed plugin also blocks `--user-level`. Run `./install.sh --uninstall` first: without a record it removes the plugin and marketplace by name, and otherwise only files byte-identical to this repository's copies and hook entries identical to ours, warning about the rest. Then install again.
 
 After a plugin-mode uninstall, Claude Code and Codex keep their own bookkeeping files: an empty `installed_plugins.json` and `known_marketplaces.json`, `"enabledPlugins": {}` in `settings.json`, a plugin cache folder marked `.orphaned_at`, and Codex's `config.toml`. They belong to the tools, not to this script; in the sandbox measurement none of them still named this marketplace.
 
@@ -179,17 +181,17 @@ File, agent and environment variable names are Turkish in origin and kept on pur
 
 ## Tests
 
-Three suites, each run from its own folder:
+Three suites; run these lines from the repository root (the parentheses keep each `cd` to its own line):
 
 ```sh
-# repository root: install script tests
+# install script tests
 python3 -m unittest discover -s tests
 
-# skills/orchestration: hook tests
-cd skills/orchestration && python3 -m unittest discover -s hooks/tests
+# hook tests
+(cd skills/orchestration && python3 -m unittest discover -s hooks/tests)
 
-# skills/orchestration/scripts: script tests
-cd skills/orchestration/scripts && python3 -m unittest discover -s tests -t tests
+# script tests
+(cd skills/orchestration/scripts && python3 -m unittest discover -s tests -t tests)
 ```
 
 The install tests run `install.sh` in a temporary home directory; tests that need the real `claude` or `codex` binary are skipped when it is not on `PATH`. The network-denying sandbox profile uses macOS `sandbox-exec`; on Linux the install tests run without network isolation.

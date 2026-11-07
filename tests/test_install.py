@@ -60,7 +60,10 @@ def snapshot(root):
             if p == skip or os.path.dirname(skip).startswith(p):
                 continue
             st = os.lstat(p)
-            out[os.path.relpath(p, root)] = (st.st_mode, st.st_size if not os.path.isdir(p) else 0, st.st_mtime_ns)
+            # A folder's mtime is left out: it changes when anything inside is created and removed again (the
+            # install lock does that in the state folder), and its entries are compared one by one anyway.
+            isdir = stat.S_ISDIR(st.st_mode)
+            out[os.path.relpath(p, root)] = (st.st_mode, 0 if isdir else st.st_size, 0 if isdir else st.st_mtime_ns)
     return out
 
 
@@ -678,6 +681,10 @@ class TestToolFailure(Base):
         p = self.install("--claude-only")
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertIn("error: claude plugin marketplace add failed (exit 5)", p.stderr)
+        # The marketplace was recorded as pending before the command ran; uninstall settles it and the record goes.
+        items = json.loads(self.record.read_text())["items"]
+        self.assertEqual([(i["kind"], i["what"], i.get("pending")) for i in items], [("plugin", "marketplace", True)])
+        self.ok(self.install("--uninstall", "--claude-only"))
         self.assertFalse(self.record.exists())
 
     def test_codex_failure(self):
@@ -686,6 +693,214 @@ class TestToolFailure(Base):
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertIn("error: codex plugin marketplace add failed (exit 7)", p.stderr)
         self.assertEqual(self.codex_roles(), [], "nothing is copied after a failed tool command")
+
+
+class TestRecordEdges(FakeTools):
+    """Third round: legacy plugin installs, interrupted runs, plugin-only records, JSON formatting, broken links,
+    folders in the way, the lock, backup names and record validation."""
+
+    def state(self):
+        return self.home / ".local/state/claude-codex-orchestration"
+
+    # Y1
+    def test_plugin_mode_role_without_record_blocks(self):
+        roles = self.codex_dir / "agents"
+        roles.mkdir(parents=True)
+        shutil.copy(str(REPO / "codex/agents/worker.toml"), str(roles / "worker.toml"))
+        before = snapshot(self.home)
+        p = self.install("--codex-only")
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("found an install without a record: run ./install.sh --uninstall first", p.stderr)
+        self.assertIn(str(roles / "worker.toml"), p.stderr)
+        self.assertFalse(self.record.exists())
+        self.assertEqual(snapshot(self.home), before)
+        self.ok(self.install("--uninstall", "--codex-only"))
+        self.assertFalse((roles / "worker.toml").exists())
+        self.ok(self.install("--codex-only"))
+        self.assertTrue(self.record.exists())
+
+    def test_plugin_mode_registered_plugin_without_record_blocks(self):
+        plugins = self.claude_dir / "plugins"
+        plugins.mkdir(parents=True)
+        (plugins / "installed_plugins.json").write_text(json.dumps({"version": 2, "plugins": {PLUGIN_ID: [{}]}}))
+        p = self.install("--claude-only")
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("found an install without a record: run ./install.sh --uninstall first", p.stderr)
+        self.assertFalse(self.record.exists())
+
+    # Y2
+    def test_interrupted_install_is_cleaned_up(self):
+        self.claude_dir.mkdir()
+        before = snapshot_without_state(self.home)
+        agents = self.claude_dir / "agents"
+        agents.mkdir()
+        agents.chmod(0o500)  # the first agent copy fails half way through the run
+        try:
+            p = self.install("--user-level", "--claude-only")
+        finally:
+            agents.chmod(0o755)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertNotIn("Traceback", p.stderr)
+        rec = json.loads(self.record.read_text())
+        pending = [i["path"] for i in rec["items"] if i.get("pending")]
+        self.assertEqual(pending, [str(agents / "explorer.md")])
+        agents.rmdir()
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertFalse(self.record.exists())
+        self.assertEqual(snapshot_without_state(self.home), before)
+
+    def test_pending_item_with_original_content_is_left(self):
+        agents = self.claude_dir / "agents"
+        agents.mkdir(parents=True)
+        (agents / "worker.md").write_text("mine\n")
+        self.ok(self.install("--user-level", "--claude-only"))
+        rec = json.loads(self.record.read_text())
+        # As if the run had stopped right after recording the item, before writing it.
+        (agents / "worker.md").write_text("mine\n")
+        for i in rec["items"]:
+            if i.get("path") == str(agents / "worker.md"):
+                i["pending"] = True
+        self.record.write_text(json.dumps(rec))
+        p = self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertEqual((agents / "worker.md").read_text(), "mine\n")
+        self.assertNotIn("worker.md was changed", p.stderr)
+
+    def test_sweep_removes_unrecorded_copies_of_ours(self):
+        self.ok(self.install("--user-level", "--claude-only"))
+        rec = json.loads(self.record.read_text())
+        worker = str(self.claude_dir / "agents" / "worker.md")
+        rec["items"] = [i for i in rec["items"] if i.get("path") != worker
+                        and not (i["kind"] == "json" and i["event"] == "SessionStart")]
+        self.record.write_text(json.dumps(rec))
+        p = self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertIn("worker.md is not in the install record but is identical to this repo's copy: removed",
+                      p.stderr)
+        self.assertIn("1 hook entry running this repo's hooks was not in the install record: removed", p.stderr)
+        self.assertFalse(Path(worker).exists())
+        self.assertEqual(self.our_hook_commands(self.claude_dir / "settings.json"), [])
+        self.assertFalse(self.record.exists())
+
+    def test_identical_file_there_before_install_stays(self):
+        agents = self.claude_dir / "agents"
+        agents.mkdir(parents=True)
+        shutil.copy(str(REPO / "agents/worker.md"), str(agents / "worker.md"))
+        self.ok(self.install("--user-level", "--claude-only"))
+        p = self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertTrue((agents / "worker.md").is_file())
+        self.assertNotIn("worker.md", p.stderr)
+        self.assertEqual(sorted(x.name for x in agents.iterdir()), ["worker.md"])
+
+    # Y3
+    def test_plugin_only_record_goes_on_uninstall(self):
+        p = self.ok(self.install("--claude-only"))
+        self.assertIn("fake claude plugin install", p.stdout)
+        kinds = [(i["kind"], i.get("pending")) for i in json.loads(self.record.read_text())["items"]]
+        self.assertEqual(kinds, [("plugin", None), ("plugin", None)])
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertFalse(self.record.exists())
+
+    # Y4
+    def test_json_round_trip_is_byte_identical(self):
+        self.claude_dir.mkdir()
+        original = json.dumps({"theme": "ğüş", "hooks": {}}, indent=4, ensure_ascii=False) + "\n"
+        settings = self.claude_dir / "settings.json"
+        settings.write_bytes(original.encode("utf-8"))
+        self.ok(self.install("--user-level", "--claude-only"))
+        merged = settings.read_text(encoding="utf-8")
+        self.assertIn('\n    "theme": "ğüş"', merged)
+        self.assertIn('\n        "SessionStart": [', merged)
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertEqual(settings.read_bytes(), original.encode("utf-8"))
+
+    def test_json_created_keys_go(self):
+        self.claude_dir.mkdir()
+        settings = self.claude_dir / "settings.json"
+        settings.write_text('{"theme": "dark"}')
+        self.ok(self.install("--user-level", "--claude-only"))
+        self.ok(self.install("--uninstall", "--claude-only"))
+        self.assertEqual(settings.read_text(), '{\n  "theme": "dark"\n}')
+
+    # Y5
+    def test_broken_symlink_config_refused(self):
+        self.claude_dir.mkdir()
+        settings = self.claude_dir / "settings.json"
+        os.symlink(str(self.home / "dotfiles" / "missing.json"), settings)
+        before = snapshot(self.home)
+        p = self.install("--user-level", "--claude-only")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("error: %s is a broken symlink; fix it and rerun" % settings, p.stderr)
+        self.assertEqual(snapshot(self.home), before)
+
+    # Y6
+    def test_folder_where_a_file_goes_refused(self):
+        (self.claude_dir / "agents" / "worker.md").mkdir(parents=True)
+        before = snapshot(self.home)
+        p = self.install("--user-level", "--claude-only")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("worker.md is a directory, not a file; move it away and rerun", p.stderr)
+        self.assertEqual(snapshot(self.home), before)
+
+    def test_lock_blocks_a_second_run(self):
+        lock = self.state() / "install.lock"
+        lock.mkdir(parents=True)
+        (lock / "pid").write_text("%d\n" % os.getpid())  # a live process
+        before = snapshot(self.home)
+        p = self.install("--user-level", "--claude-only")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("error: another install.sh is running (lock: %s)" % lock, p.stderr)
+        self.assertEqual(snapshot(self.home), before)
+
+    def test_stale_lock_is_taken_over(self):
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        lock = self.state() / "install.lock"
+        lock.mkdir(parents=True)
+        (lock / "pid").write_text("%d\n" % dead.pid)
+        p = self.ok(self.install("--user-level", "--claude-only"))
+        self.assertIn("removing a stale lock", p.stderr)
+        self.assertFalse(lock.exists(), "the lock is released on exit")
+
+    def test_lock_folders_removed_after_refusal(self):
+        self.skill.mkdir(parents=True)  # a skill copy without a record: refused with exit 3
+        p = self.install("--user-level", "--claude-only")
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertFalse((self.home / ".local").exists(), "the folders made for the lock are removed again")
+
+    def test_backup_folder_name(self):
+        agents = self.claude_dir / "agents"
+        agents.mkdir(parents=True)
+        (agents / "worker.md").write_text("mine\n")
+        p = self.ok(self.install("--user-level", "--claude-only"))
+        names = [d.name for d in (self.state() / "backups").iterdir()]
+        self.assertEqual(len(names), 1)
+        self.assertRegex(names[0], r"^\d{8}-\d{6}-\d{6}-\d+$")
+        self.assertIn("Backups: %s" % (self.state() / "backups" / names[0]), p.stdout)
+
+    def test_record_item_missing_field(self):
+        self.ok(self.install("--user-level", "--claude-only"))
+        rec = json.loads(self.record.read_text())
+        n = next(k for k, i in enumerate(rec["items"]) if i["kind"] == "file")
+        del rec["items"][n]["sha256"]
+        self.record.write_text(json.dumps(rec))
+        before = snapshot(self.home)
+        p = self.install("--uninstall")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("error: cannot parse %s: item %d (file) lacks a valid 'sha256' field" % (self.record, n),
+                      p.stderr)
+        self.assertNotIn("Traceback", p.stderr)
+        self.assertEqual(snapshot(self.home), before)
+
+
+class TestOnlyClaudeRecord(Base):
+    tools = ("claude",)
+
+    @need_claude
+    def test_plugin_record_goes(self):
+        self.ok(self.install())
+        self.assertTrue(self.record.exists())
+        self.ok(self.install("--uninstall"))
+        self.assertFalse(self.claude_installed())
+        self.assertFalse(self.record.exists())
 
 
 if __name__ == "__main__":
