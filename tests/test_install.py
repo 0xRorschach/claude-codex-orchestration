@@ -15,6 +15,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -859,6 +860,44 @@ class TestRecordEdges(FakeTools):
         p = self.ok(self.install("--user-level", "--claude-only"))
         self.assertIn("removing a stale lock", p.stderr)
         self.assertFalse(lock.exists(), "the lock is released on exit")
+
+    def test_pidless_old_lock_is_taken_over(self):
+        lock = self.state() / "install.lock"
+        lock.mkdir(parents=True)
+        old = time.time() - 3600
+        os.utime(str(lock), (old, old))
+        p = self.ok(self.install("--user-level", "--claude-only"))
+        self.assertIn("removing a stale lock without a pid, older than 10 minutes", p.stderr)
+        self.assertFalse(lock.exists())
+
+    def test_pidless_fresh_lock_blocks(self):
+        lock = self.state() / "install.lock"
+        lock.mkdir(parents=True)
+        p = self.install("--user-level", "--claude-only")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("if no install.sh is running, remove %s" % lock, p.stderr)
+        self.assertTrue(lock.is_dir())
+
+    def test_sweep_stays_inside_recorded_tools(self):
+        # Codex-only user-level install; the user later copies our agent files and one of our hook entries into
+        # Claude Code by hand. Uninstalling with claude on PATH must not touch them.
+        self.fake_tool("claude", 0)
+        (self.bin / "claude").unlink()
+        self.ok(self.install("--user-level"))
+        self.assertEqual(json.loads(self.record.read_text())["tools"], ["codex"])
+        agents = self.claude_dir / "agents"
+        agents.mkdir(parents=True)
+        for f in sorted((REPO / "agents").glob("*.md")):
+            shutil.copy(str(f), str(agents / f.name))
+        group = fragment_group("settings-parcasi.json", "PreToolUse", "agent-tip-kapisi.py")
+        settings = self.claude_dir / "settings.json"
+        settings.write_text(json.dumps({"hooks": {"PreToolUse": [group]}}))
+        self.fake_tool("claude")
+        p = self.ok(self.install("--uninstall"))
+        self.assertEqual(sorted(x.name for x in agents.iterdir()), AGENTS, p.stderr)
+        self.assertEqual(json.loads(settings.read_text()), {"hooks": {"PreToolUse": [group]}})
+        self.assertNotIn("not in the install record", p.stderr)
+        self.assertFalse(self.record.exists())
 
     def test_lock_folders_removed_after_refusal(self):
         self.skill.mkdir(parents=True)  # a skill copy without a record: refused with exit 3

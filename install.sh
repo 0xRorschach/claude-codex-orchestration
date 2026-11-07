@@ -692,16 +692,18 @@ def remove_then_restore(path, info):
 
 
 def repo_targets(rec, scope):
-    """(src, dest) pairs and (json file, fragment) pairs this record's modes install, limited to scope."""
+    """(src, dest) pairs and (json file, fragment) pairs this record's modes install, limited to scope and to the
+    tools this record installed for (a tool it never touched may hold the user's own identical copies)."""
     files, jsons = [], []
     modes = rec.data["modes"]
-    if "claude" in scope and "user" in modes:
+    tools = rec.data["tools"]
+    if "claude" in scope and "claude" in tools and "user" in modes:
         for n in sorted(os.listdir(os.path.join(REPO, "agents"))):
             if n.endswith(".md"):
                 files.append((os.path.join(REPO, "agents", n), os.path.join(CLAUDE_DIR, "agents", n)))
         jsons.append((os.path.join(CLAUDE_DIR, "settings.json"),
                       os.path.join(REPO, "skills/orchestration/hooks/settings-parcasi.json")))
-    if "codex" in scope and ("user" in modes or "plugin" in modes):
+    if "codex" in scope and "codex" in tools and ("user" in modes or "plugin" in modes):
         for n in sorted(os.listdir(os.path.join(REPO, "codex", "agents"))):
             if n.endswith(".toml"):
                 files.append((os.path.join(REPO, "codex", "agents", n), os.path.join(CODEX_DIR, "agents", n)))
@@ -1309,12 +1311,20 @@ take_lock() {
   if ! mkdir "$LOCK" 2>/dev/null; then
     local pid
     pid="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    # Stale: its process is gone, or it has no pid file (a run stopped between mkdir and writing the pid) and is
+    # older than 10 minutes (a real run writes its pid at once and finishes in seconds).
+    local stale=""
     if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
-      warn "removing a stale lock left by process $pid ($LOCK)"
+      stale="left by process $pid"
+    elif [ -z "$pid" ] && [ -n "$(find "$LOCK" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+      stale="without a pid, older than 10 minutes"
+    fi
+    if [ -n "$stale" ]; then
+      warn "removing a stale lock $stale ($LOCK)"
       rm -rf "$LOCK"
       mkdir "$LOCK" 2>/dev/null || die "another install.sh is running (lock: $LOCK)"
     else
-      die "another install.sh is running (lock: $LOCK)"
+      die "another install.sh is running (lock: $LOCK); if no install.sh is running, remove $LOCK"
     fi
   fi
   LOCK_HELD=1
