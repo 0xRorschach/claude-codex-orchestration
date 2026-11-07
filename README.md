@@ -15,6 +15,7 @@ Static version: [docs/assets/orchestration-flow.svg](docs/assets/orchestration-f
 - **Advisor** (Claude only, optional): consulted before declaring work done.
 - **Irreversible actions** (push, deleting untracked files, writing outside the workspace or to an external system) need the user's approval.
 - **Hooks:** agent-type gate, parallel-work reminder, read budget for the main session, superpowers version guard, and a load reminder when a subagent is opened before the skill was loaded.
+- **Agent-type gate (Claude Code, every session, inside subagents too).** It denies the `general-purpose`, `Explore`, `Plan`, `claude` and `fork` types and an empty type (case-insensitive; a `<plugin>:<agent>` type is checked by its last part), and any `model` parameter other than `opus` or a full Opus id starting with `claude-opus-`. Every other type passes. Each denial message says how to turn the gate off: `ORCH_TIP_KAPISI=0`.
 - **Image generation** through Codex's image tool (`skills/orchestration/scripts/gorsel_uret.py`).
 
 The full rule book is `skills/orchestration/SKILL.md`; the reasons behind the rules are in `DECISIONS.md`.
@@ -29,6 +30,8 @@ The full rule book is `skills/orchestration/SKILL.md`; the reasons behind the ru
 ## Install
 
 Pick one mode. Do not install both the plugin and the user-level copy: the skill and hooks would load twice. `install.sh` refuses to do that.
+
+What was measured: the local-clone path (`install.sh` in plugin and user-level mode, install and uninstall) in a temporary home inside a macOS sandbox without network. The GitHub source commands below (`OWNER/...`) were not measured.
 
 ### Claude Code (native plugin)
 
@@ -52,9 +55,7 @@ codex plugin marketplace add OWNER/claude-codex-orchestration
 codex plugin add orchestration@claude-codex-orchestration
 ```
 
-Codex plugins cannot ship agent roles, so copy `codex/agents/*.toml` to `~/.codex/agents/` (or use `install.sh`, below). Then open `/hooks` in Codex once and approve the new hooks: Codex skips hooks that are not trusted.
-
-Updating: Claude Code reads the plugin from the clone in place, so `git pull` is enough there. Codex reads a cached copy of the plugin: after `git pull`, run `codex plugin add orchestration@claude-codex-orchestration` again (and approve changed hooks with `/hooks`).
+Codex plugins cannot ship agent roles, so a Codex plugin user still needs a clone of this repository for the roles: copy `codex/agents/*.toml` to `~/.codex/agents/` (or use `install.sh`, below). The custom role names `explorer` and `worker` take precedence over Codex's built-in roles of the same name ([Codex docs: subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)). Then open `/hooks` in Codex once and approve the new hooks: Codex skips hooks that are not trusted.
 
 ### One step for both
 
@@ -64,7 +65,7 @@ cd claude-codex-orchestration
 ./install.sh
 ```
 
-By default this installs plugin mode from the local clone for the tool(s) it finds and copies the Codex roles. Keep the clone: Claude Code reads it in place, so `git pull` updates it there; Codex keeps a cached copy, so after `git pull` run `codex plugin add orchestration@claude-codex-orchestration` again. In `--user-level` mode the skill is a copy: run `./install.sh --user-level` again after `git pull`.
+By default this installs plugin mode from the local clone for the tool(s) it finds and copies the Codex roles. Keep the clone: it is the marketplace source.
 
 Options:
 
@@ -73,14 +74,49 @@ Options:
 | `--plugin` | Default. Registers the clone as a local marketplace, installs the plugin in each tool found and copies the Codex roles. |
 | `--user-level` | No plugin. Copies the skill into `~/.agents/skills`, the agents and roles into `~/.claude/...` and `~/.codex/...`, and registers the hooks; existing config files are backed up first. |
 | `--dry-run` | Shows what would change, changes nothing. |
-| `--uninstall` | Removes what the script installed. |
+| `--uninstall` | Removes what the script installed, as listed in its install record (see below). Works without `claude` / `codex` on `PATH`. |
 | `--claude-only` | Claude Code only. |
 | `--codex-only` | Codex only. |
 | `--help` | Prints the usage text. |
 
 `--plugin`, `--user-level` and `--uninstall` are modes: pick one. `--claude-only` and `--codex-only` exclude each other.
 
-Exit codes: `0` done (or nothing to do), `1` missing prerequisite (for example neither `claude` nor `codex` found, or Python below 3.9), `2` usage error (unknown option, or `--claude-only` with `--codex-only`), `3` would install twice (plugin and user-level copy together).
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| `0` | Done, or nothing to do. |
+| `1` | Missing prerequisite (neither `claude` nor `codex` found, Python below 3.9); a `settings.json`, `hooks.json` or install record that does not parse (`cannot parse <file>: <error>; fix or move it and rerun`, checked before anything is written); or a failed `claude` / `codex` command (`claude plugin install failed (exit N)`). |
+| `2` | Usage error (unknown option, or `--claude-only` with `--codex-only`). |
+| `3` | Would install twice (plugin and user-level copy together), or a path this script did not install is in the way: the message names the path and says to run `./install.sh --uninstall` or to move it away (`not installed by this script; move it away`). |
+
+### Install record and uninstall
+
+Every install writes `${XDG_STATE_HOME:-~/.local/state}/claude-codex-orchestration/install-record.json` (mode 0600). It lists the mode and tools, every file and folder the script created with its sha256, the skill copy (with a checksum of the whole folder and which tools use it), the Claude skills link, each hook entry it added to `settings.json` / `hooks.json` (the whole entry), the plugins and marketplaces it registered, and for every file it replaced the backup: path, original type, mode and, for a symlink, the link target. Backups go to `backups/<date-time>/<original absolute path>` next to the record (folder mode 0700).
+
+`--uninstall` removes only what the record lists, and only while it is unchanged:
+
+- A file or skill copy whose checksum no longer matches (you edited it) is left in place with a warning.
+- A file the install replaced is put back from its backup, with its mode; a replaced symlink comes back as the same link.
+- Only the hook entries the install added are taken out; an identical entry that was already there before the install stays.
+- Folders the install created are removed when empty. When nothing is left, the record itself is removed.
+- `--claude-only` / `--codex-only` limit the uninstall to one tool. The shared skill copy in `~/.agents/skills/orchestration` goes when the last tool that uses it is uninstalled.
+- An existing symlink at a copied file (say `~/.codex/agents/worker.toml` pointing into a dotfiles folder) is replaced by the file itself; the file it pointed to is never written. A symlinked `settings.json` / `hooks.json` is written through, so the link stays. Rewritten JSON files keep their mode.
+
+After `git pull`: plugin mode needs the update step below; in `--user-level` mode run `./install.sh --user-level` again, which updates the recorded copy. `--uninstall` judges the skill copy against the checksum recorded at install, not against the current clone, so it still removes the copy after a `git pull` as long as you did not edit it.
+
+Upgrading from an install without a record (made by an earlier version of `install.sh`): installing again stops with exit 3 and names the path. Run `./install.sh --uninstall` first. Without a record it is conservative: it removes only files byte-identical to this repository's copies and hook entries identical to ours, and warns about the rest. Then install again.
+
+After a plugin-mode uninstall, Claude Code and Codex keep their own bookkeeping files: an empty `installed_plugins.json` and `known_marketplaces.json`, `"enabledPlugins": {}` in `settings.json`, a plugin cache folder marked `.orphaned_at`, and Codex's `config.toml`. They belong to the tools, not to this script; in the sandbox measurement none of them still named this marketplace.
+
+### Updating
+
+Depends on how you installed:
+
+- **From GitHub as a marketplace** (not measured): Claude Code: `claude plugin marketplace update claude-codex-orchestration`, then `claude plugin update orchestration@claude-codex-orchestration` and restart the session. Codex: `codex plugin marketplace upgrade claude-codex-orchestration`, then `codex plugin add orchestration@claude-codex-orchestration` again. Copy the roles again if they changed.
+- **From a local clone with `install.sh`:** `git pull`. Claude Code reads the plugin from the clone in place (restart the session). Codex keeps a cached copy: run `codex plugin add orchestration@claude-codex-orchestration` again. In `--user-level` mode run `./install.sh --user-level` again.
+
+In both cases approve changed hooks in Codex with `/hooks`.
 
 ### Verify
 
@@ -104,6 +140,8 @@ Environment variables (full details in `skills/orchestration/hooks/README.md` an
 | `ORCH_MUAF_BETIKLER` | read budget hook | Extra exempt script file names, comma-separated (base name compared). | none |
 | `ORCH_SURUM_BEKCISI` | superpowers version guard | `0` disables the hook. | on |
 | `ORCH_HATIRLATICI` | load reminder | `0` disables the hook. | on |
+| `ORCH_TIP_KAPISI` | agent-type gate | `0` disables the gate: every Agent call passes, nothing is logged. | on |
+| `ORCH_PARALEL_HATIRLATICI` | parallel-work reminder | `0` disables the hook. | on |
 | `ORCH_PARALEL_ESIK` | parallel-work reminder | Concurrent-agent threshold quoted in the reminder; invalid or non-positive values fall back to the default. | `15` |
 | `ORCH_LOG_DIR` | agent-type gate, parallel-work reminder, load reminder | Log folder (and the load reminder's state); wins over the plugin data folder. | plugin data folder, else a per-hook folder under the home directory |
 | `ORCH_CODEX_BIN` | cross-family scripts | Codex binary to run. An absolute path must be executable; a bare name is looked up on `PATH`; a relative path is rejected. | `codex` |
@@ -133,7 +171,8 @@ File, agent and environment variable names are Turkish in origin and kept on pur
 - Codex plugins cannot ship agent roles; the roles are copied separately.
 - Claude Code plugin agents get the `orchestration:` prefix.
 - Measurements cited in `SKILL.md` and `DECISIONS.md` are small-n internal measurements, not benchmarks.
-- `aile_elestirmen.py` copies `~/.codex/auth.json` into a private temporary home for each Codex call. If Codex refreshes the token, the new copy is written back only when the original file is unchanged. The script never prints or sends the token.
+- `aile_elestirmen.py` copies `~/.codex/auth.json` into a private temporary home for each Codex call. If Codex refreshes the token, the new copy is written back only when the original file is unchanged since the call started. The lock behind that check coordinates only this script's own calls; the Codex CLI does not take it. A second Codex session on the same account running at the same time can therefore overwrite the refreshed token or keep it from being written back. Keep no other Codex session open during a critic call; after a credential error run `codex login`. The script never prints or sends the token.
+- The agent-type gate denies `Plan` and `Explore` in every session. Built-in Claude Code flows that open such an agent themselves (plan mode, for example) may be blocked as well (not verified). Turn the gate off with `ORCH_TIP_KAPISI=0`.
 - The advisor tool is optional and exists only on the Claude side.
 - Load reminder: in Claude Code the note arrives with the first Agent call's result, so it shapes the later spawns, not the first one. In Codex it runs only after you trust it with `/hooks`.
 - Codex plugin hook loading via `${PLUGIN_ROOT}` not measured in a live session.
@@ -153,7 +192,7 @@ cd skills/orchestration && python3 -m unittest discover -s hooks/tests
 cd skills/orchestration/scripts && python3 -m unittest discover -s tests -t tests
 ```
 
-The install tests run `install.sh` in a temporary home directory under a sandbox profile without network; tests that need the real `claude` or `codex` binary are skipped when it is not on `PATH`.
+The install tests run `install.sh` in a temporary home directory; tests that need the real `claude` or `codex` binary are skipped when it is not on `PATH`. The network-denying sandbox profile uses macOS `sandbox-exec`; on Linux the install tests run without network isolation.
 
 No real model is called; the script tests use fake `codex` and `claude` binaries, and the hook tests use a temporary home directory.
 

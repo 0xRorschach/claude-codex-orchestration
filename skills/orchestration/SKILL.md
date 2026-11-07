@@ -92,13 +92,13 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
 - **Load reminder.** If the main session opens a subagent and this skill was not loaded in that session,
   `hooks/orkestrasyon_hatirlatici.py` (PreToolUse; Claude `Agent|Task`, Codex `^(spawn_agent|Agent)$`) reminds once
   and never blocks. Off: `ORCH_HATIRLATICI=0`. In Claude the note (additionalContext) arrives with the first Agent
-  call's result, so it shapes the later spawns, not the first one. [measured 2026-11-08, n=152 main sessions: 44.7%
+  call's result, so it shapes the later spawns, not the first one. [measured 2026-11-07, n=152 main sessions: 44.7%
   loaded on their own, 11.2% user-triggered, 44.1% never loaded (mostly single-agent sessions)]
 - **Multiply independent work.** Extract dependencies before dispatching; independent tasks, scenarios or questions
   go to separate subagents in parallel (separate folder/worktree, separate result file, merge in the main session).
   In Claude Code `hooks/paralel-is-hatirlatici.py` (PostToolUse `Agent|Task`) asks on every agent start "is there
   work that does not wait for this agent?". When it fires, either start the independent work in the same turn or tell
-  the user why not in one sentence; a sequential engine step needs no reason.
+  the user why not in one sentence; a sequential engine step needs no reason. Off: `ORCH_PARALEL_HATIRLATICI=0`.
 
 ### Who decides
 
@@ -126,7 +126,8 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
   outside the workspace or to an external service; it returns to the main session. Outward-facing or hard-to-reverse
   actions also need the user's approval: the main session's approval does not replace the user's. Local edits need no
   stop. The worker commits task work on its own worktree/feature branch; merging to main and pushing are the main
-  session's job. The main session may commit without asking [profile]. A written explicit exception in the project's
+  session's job. The main session asks before committing [profile]; committing without asking is a profile option
+  (`profile/profile.example.md`). A written explicit exception in the project's
   CLAUDE.md/AGENTS.md wins (e.g. "the agent may merge to main and push").
 - **Worktree lifecycle.** Open it inside the project repo, in a gitignored `.worktrees/<name>` or the tool's in-project
   folder (Claude Code `EnterWorktree`: `.claude/worktrees/` [measured 2026-10-17]); never as a sibling folder next to
@@ -422,8 +423,10 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
 - **Do not use the built-in `Explore` / `general-purpose`**: they carry no `effort` and inherit the main session's
   high. **Do not use `fork`**: it ignores the model setting and clones the main session.
 - **Gate:** `hooks/agent-tip-kapisi.py` (PreToolUse `Agent|Task`) rejects `general-purpose`, `Explore`, `Plan`,
-  `claude`, `fork`, an empty type and any `model` parameter other than `opus`, inside subagents too; it accepts both
-  the plain and the `orchestration:`-prefixed agent names. If rejected,
+  `claude`, `fork` and an empty type (case-insensitive; a `<plugin>:<agent>` type is checked by its last part), and
+  any `model` parameter that is neither `opus` nor a full Opus id starting with `claude-opus-`, inside subagents too;
+  it accepts both the plain and the `orchestration:`-prefixed agent names. Off: `ORCH_TIP_KAPISI=0` (the user's
+  switch, set in the environment the tool starts in; every denial message names it). If rejected,
   reopen with the right type; if the user asked for another type, tell them about the gate, never loosen it yourself.
 - Do not write a `model` parameter; the agent file sets the model (the gate rejects non-Opus). If Sonnet is needed,
   use the `tarayici` type, not a parameter. Fable is never opened as a subagent; it is only the advisor.

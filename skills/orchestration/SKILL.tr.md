@@ -88,13 +88,13 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
 - **Yükleme hatırlatıcısı.** Ana oturum bir alt ajan açarsa ve bu skill o oturumda yüklenmemişse
   `hooks/orkestrasyon_hatirlatici.py` (PreToolUse; Claude `Agent|Task`, Codex `^(spawn_agent|Agent)$`) bir kez hatırlatır
   ve hiç engellemez. `ORCH_HATIRLATICI=0` kancayı kapatır. Claude'da not (additionalContext) ilk Agent çağrısının sonucuyla
-  gelir; bu yüzden ilk açılışı değil, sonrakileri biçimlendirir. [ölçüm 2026-11-08, n=152 ana oturum: %44,7 kendiliğinden
+  gelir; bu yüzden ilk açılışı değil, sonrakileri biçimlendirir. [ölçüm 2026-11-07, n=152 ana oturum: %44,7 kendiliğinden
   yükledi, %11,2 kullanıcı tetikledi, %44,1 hiç yüklemedi (çoğu tek ajanlı oturum)]
 - **Bağımsız işi çoğalt.** Dağıtmadan önce bağımlılıkları çıkar; bağımsız görevler, senaryolar ya da sorular ayrı alt
   ajanlara paralel gider (ayrı klasör/worktree, ayrı sonuç dosyası, birleştirme ana oturumda). Claude Code'da
   `hooks/paralel-is-hatirlatici.py` (PostToolUse `Agent|Task`) her ajan başlangıcında "bu ajanı beklemeyen iş var mı?"
   diye sorar. Uyarı gelince ya bağımsız işi aynı turda başlat ya da neden başlatmadığını kullanıcıya tek cümleyle
-  söyle; sıralı motor adımı gerekçe istemez.
+  söyle; sıralı motor adımı gerekçe istemez. `ORCH_PARALEL_HATIRLATICI=0` kancayı kapatır.
 
 ### Karar kimde
 
@@ -120,8 +120,8 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
 - **Geri alınamaz eylem, iki kademe.** Alt ajan push etmez, uzak dal silmez, izlenmeyen dosya silmez, çalışma alanı
   dışına ya da dış bir servise yazmaz; ana oturuma döner. Dışa dönük ya da geri dönüşü zor eylem ayrıca kullanıcının
   onayını ister: ana oturumun onayı kullanıcınınkinin yerine geçmez. Yerel düzenleme durak istemez. Worker görev işini
-  kendi worktree'sinde/özellik dalında commit eder; main'e birleştirme ve push ana oturumun işidir. Ana oturum sormadan
-  commit edebilir [profil]. Projenin CLAUDE.md/AGENTS.md'sinde yazılı açık bir istisna varsa o geçerlidir (ör. "ajan
+  kendi worktree'sinde/özellik dalında commit eder; main'e birleştirme ve push ana oturumun işidir. Ana oturum commit
+  etmeden önce sorar [profil]; sormadan commit profilde seçilebilir (`profile/profile.example.md`). Projenin CLAUDE.md/AGENTS.md'sinde yazılı açık bir istisna varsa o geçerlidir (ör. "ajan
   main'e birleştirip push edebilir").
 - **Worktree yaşam döngüsü.** Proje deposunun içinde, gitignore'lu `.worktrees/<name>` klasöründe ya da aracın proje içi
   klasöründe aç (Claude Code `EnterWorktree`: `.claude/worktrees/` [ölçüm 2026-10-17]); asla projelerinin yanında kardeş
@@ -417,9 +417,11 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
 - **Yerleşik `Explore` / `general-purpose` kullanma**: `effort` taşımazlar ve ana oturumun high düzeyini miras alırlar.
   **`fork` kullanma**: model ayarını yok sayar ve ana oturumu kopyalar.
 - **Kapı:** `hooks/agent-tip-kapisi.py` (PreToolUse `Agent|Task`) `general-purpose`, `Explore`, `Plan`, `claude`,
-  `fork`, boş tip ve `opus` dışındaki her `model` parametresini reddeder, alt ajanların içinde de; düz adları da
-  `orchestration:` önekli ajan adlarını da kabul eder. Reddederse doğru tiple yeniden aç; kullanıcı başka bir tip
-  istediyse ona kapıyı anlat, kapıyı asla kendin gevşetme.
+  `fork` ve boş tipi reddeder (büyük-küçük harf ayrımı yok; `<eklenti>:<ajan>` biçimindeki tipte son parçaya bakılır).
+  Değeri `opus` olmayan ve `claude-opus-` ile başlamayan her `model` parametresini de reddeder, alt ajanların içinde
+  de. Düz adları da `orchestration:` önekli ajan adlarını da kabul eder. `ORCH_TIP_KAPISI=0` kapıyı kapatır
+  (kullanıcının anahtarıdır, aracın başladığı ortamda ayarlanır; her ret mesajı bunu söyler). Reddederse doğru tiple
+  yeniden aç; kullanıcı başka bir tip istediyse ona kapıyı anlat, kapıyı asla kendin gevşetme.
 - `model` parametresi yazma; modeli ajan dosyası belirler (kapı Opus dışını reddeder). Sonnet gerekirse parametre değil
   `tarayici` tipini kullan. Fable asla alt ajan olarak açılmaz; yalnız danışmandır.
 - **Danışman:** `advisor` aracı (`~/.claude/settings.json` → `advisorModel: "fable"`); `/advisor` değişikliği geçerli
