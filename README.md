@@ -167,7 +167,33 @@ Regenerates `docs/assets/orchestration-flow.gif` and `docs/assets/orchestration-
 
 ## Türkçe
 
-<!-- TR: bu bölüm ayrı şeritte doldurulacak -->
+Bu depo Claude Code ve Codex CLI için bir orkestrasyon skill'i, tipli alt ajanlar ve kancalar (hook) içerir. Ana oturum planlar, karar verir ve denetler; işi alt ajanlar yapar; önemli noktalarda öbür model ailesinden bir eleştirmen işi okur. Geri alınamaz eylemler (push, izlenmeyen dosya silme, dış sisteme yazma) kullanıcı onayı bekler.
+
+Claude Code'a eklenti olarak kurmak için:
+
+```
+/plugin marketplace add OWNER/claude-codex-orchestration
+/plugin install orchestration@claude-codex-orchestration
+```
+
+Codex'e eklenti olarak kurmak için:
+
+```sh
+codex plugin marketplace add OWNER/claude-codex-orchestration
+codex plugin add orchestration@claude-codex-orchestration
+```
+
+Codex eklentisi ajan rollerini taşıyamadığı için `codex/agents/*.toml` dosyalarını `~/.codex/agents/` klasörüne kopyalayın ya da iki aracı tek adımda kurun:
+
+```sh
+git clone https://github.com/OWNER/claude-codex-orchestration
+cd claude-codex-orchestration
+./install.sh
+```
+
+Codex, kurulumdan sonra yeni kancaları siz Codex içinde bir kez `/hooks` açıp onlara güvenene kadar çalıştırmaz. Eklentiyi ve kullanıcı düzeyi kopyayı birlikte kurmayın, skill ve kancalar iki kez yüklenir (`install.sh` buna izin vermez).
+
+Seçenekler, güncelleme ve doğrulama için [Install](#install), ayarlar için [Configuration](#configuration), bilinen sınırlar için [Known limits](#known-limits) bölümüne bakın. Kural kitabının Türkçe okuma kopyası [skills/orchestration/SKILL.tr.md](skills/orchestration/SKILL.tr.md) dosyasındadır; model İngilizce `SKILL.md`'yi yükler ve iki dosya ayrışırsa `SKILL.md` geçerlidir.
 
 ## Acknowledgements
 
