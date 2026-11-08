@@ -8,7 +8,9 @@ exactly at that moment. It does not block; it only adds context.
 It stays silent in helpers opened from inside a subagent (input carries agent_id). Each trigger writes one log line
 (for measurement): time, session_id, tool_name, subagent_type, the first 60 characters of description (so sequential
 and parallel starts can be told apart later). A trigger that arrives within AYNI_TUR_SN of the session's last WARNING
-(agents started in parallel in the same message) does not warn again, but is still logged. The window is measured
+does not warn again, but is still logged. This groups agent calls that complete at about the same time (for example
+agents started in the background in one message); foreground agents of the same message that finish at different
+times can each warn. The window is measured
 from the last warning; a suppressed trigger does not extend it, so frequent starts do not stay silent one after
 another. A sequential chain is not suppressed. On an error or in doubt the hook warns; the exit code is always 0.
 
@@ -32,9 +34,10 @@ import time
 from pathlib import Path
 
 VARSAYILAN_ESIK = 15  # default concurrent-agent threshold; configurable via ORCH_PARALEL_ESIK
-# 5 s: triggers of agents started in parallel in one message land in the log within the same second (measured: 3
-# lines in one second); the rest is margin for hook start-up delay. The next sequential start comes at least one model
-# turn later, usually longer than this.
+# 5 s: triggers of agent calls that complete together (e.g. started in the background in one message) land in the log
+# within the same second (measured: 3 lines in one second); the rest is margin for hook start-up delay. Foreground
+# agents that finish further apart, and the next sequential start (at least one model turn later), usually fall
+# outside it and warn again.
 AYNI_TUR_SN = 5
 SAKLAMA_SN = 7 * 86400  # 7 days: state of closed sessions does not pile up, a running session is unaffected
 ACIKLAMA_UZUNLUGU = 60  # enough to recognise the task in the log, short enough to keep one line per trigger
