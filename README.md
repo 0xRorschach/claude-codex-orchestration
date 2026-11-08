@@ -173,7 +173,7 @@ Environment variables (full details in `skills/orchestration/hooks/README.md` an
 | `ORCH_TIP_KAPISI` | agent-type gate | `0` disables the gate: every Agent call passes, nothing is logged. | on |
 | `ORCH_PARALEL_HATIRLATICI` | parallel-work reminder | `0` disables the hook. | on |
 | `ORCH_PARALEL_ESIK` | parallel-work reminder | Concurrent-agent threshold quoted in the reminder; invalid or non-positive values fall back to the default. | `15` |
-| `ORCH_LOG_DIR` | agent-type gate, parallel-work reminder, load reminder | Log folder (and the load reminder's state); wins over the plugin data folder. | plugin data folder, else a per-hook folder under the home directory |
+| `ORCH_LOG_DIR` | agent-type gate, parallel-work reminder, load reminder | Log folder (and the state of the load reminder and the parallel-work reminder); wins over the plugin data folder. | plugin data folder, else a per-hook folder under the home directory |
 | `ORCH_CODEX_BIN` | cross-family scripts | Codex binary to run. An absolute path must be executable; a bare name is looked up on `PATH`; a relative path is rejected. | `codex` |
 | `ORCH_CLAUDE_BIN` | cross-family scripts | Claude binary to run, same rules. | `claude` |
 

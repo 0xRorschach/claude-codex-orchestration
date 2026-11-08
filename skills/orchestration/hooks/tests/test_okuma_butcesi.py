@@ -70,6 +70,62 @@ class OkumaButcesi(unittest.TestCase):
                     "tool_response": {"filenames": ["x" * 200, "y" * 200]}})
         self.assertIsNotNone(baglam(p))
 
+    def toplam(self, sid):
+        return json.loads((self.durum_dizini / (sid + ".json")).read_text())["toplam"]
+
+    def test_bash_edit_diff_sayilmaz(self):
+        # Claude Code adds bashEditDiff to the Bash response; it does not reach the model. Only stdout + stderr count.
+        g = bash("x" * 300)
+        g["tool_response"]["stderr"] = "y" * 200
+        g["tool_response"]["bashEditDiff"] = {"filePath": "/a.md", "diff": "z" * 50000}
+        self.k(g)
+        self.assertEqual(self.toplam("oturum-1"), 500)
+
+    def test_read_yalniz_icerik_sayilir(self):
+        self.k({"session_id": "rc", "tool_name": "Read", "tool_input": {"file_path": "/a.py"},
+                "tool_response": {"type": "text", "file": {"filePath": "/" + "p" * 900, "content": "x" * 120,
+                                                           "numLines": 3, "startLine": 1, "totalLines": 3}}})
+        self.assertEqual(self.toplam("rc"), 120)
+
+    def test_read_goruntu_sifir(self):
+        self.k({"session_id": "ri", "tool_name": "Read", "tool_input": {"file_path": "/a.png"},
+                "tool_response": {"type": "image", "file": {"base64": "b" * 90000, "type": "image/png"}}})
+        self.assertEqual(self.toplam("ri"), 0)
+
+    def test_kaydedilmis_cikti_onizleme_kadar(self):
+        # persistedOutputPath: the model gets a preview, so stdout counts at most 2500; stderr counts in full.
+        g = bash("x" * 30000)
+        g["tool_response"]["stderr"] = "y" * 100
+        g["tool_response"]["persistedOutputPath"] = "/h/.claude/tool-results/a.txt"
+        self.k(g)
+        g2 = bash("x" * 1000)
+        g2["tool_response"]["persistedOutputPath"] = "/h/.claude/tool-results/b.txt"
+        self.k(g2)
+        self.assertEqual(self.toplam("oturum-1"), 2500 + 100 + 1000)
+
+    def test_grep_content_ve_filenames(self):
+        self.k({"session_id": "gr", "tool_name": "Grep", "tool_input": {"pattern": "a"},
+                "tool_response": {"mode": "content", "numFiles": 2, "content": "x" * 300,
+                                  "filenames": ["a" * 40, "b" * 60], "appliedPattern": "z" * 5000}})
+        self.assertEqual(self.toplam("gr"), 300 + 40 + 60)
+
+    def test_glob_yalniz_filenames(self):
+        self.k({"session_id": "gl", "tool_name": "Glob", "tool_input": {"pattern": "*"},
+                "tool_response": {"filenames": ["x" * 200, "y" * 100], "durationMs": 3, "numFiles": 2,
+                                  "truncated": False, "note": "n" * 5000}})
+        self.assertEqual(self.toplam("gl"), 300)
+
+    def test_read_bilinmeyen_dosya_sekli_geri_donus(self):
+        self.k({"session_id": "rp", "tool_name": "Read", "tool_input": {"file_path": "/a.pdf"},
+                "tool_response": {"type": "parts", "file": {"filePath": "/a.pdf", "outputDir": "x" * 700}}})
+        self.assertEqual(self.toplam("rp"), len("parts") + len("/a.pdf") + 700)
+
+    def test_bilinmeyen_sekil_ozyinelemeli(self):
+        p = self.k({"session_id": "bs", "tool_name": "Bash", "tool_input": {"command": "ls"},
+                    "tool_response": {"output": "x" * 1200}})
+        self.assertIsNotNone(baglam(p))
+        self.assertEqual(self.toplam("bs"), 1200)
+
     def test_baska_arac_sayilmaz(self):
         p = self.k({"session_id": "o", "tool_name": "Write", "tool_input": {}, "tool_response": {"c": "x" * 5000}})
         self.assertEqual(p.stdout, "")

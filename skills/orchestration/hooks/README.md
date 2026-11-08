@@ -41,13 +41,22 @@ Where the installed version is read from:
 
 ### okuma_butcesi.py (PostToolUse)
 
-Sums, per session, the character count of the main session's Read, Bash, Grep and Glob output. When the total
+Sums, per session, the character count of the text that reaches the model in the main session's Read, Bash, Grep
+and Glob output (allowlist: Bash `stdout` + `stderr`; Read `file.content`; Grep `content` + `filenames`; Glob
+`filenames`; Codex shell output is plain text and is counted as is). The `bashEditDiff` field that Claude Code adds to
+the Bash response does not reach the model and is not counted. A Read image (`base64`) counts 0; another Read shape
+without `content` (PDF parts, for example) falls back to the recursive sum. Claude Code saves large Bash output to a
+file and sends the model a short preview (the response carries `persistedOutputPath`); stdout then counts at most 2500
+characters (measured n=8: counted 27,618-30,000, preview sent to the model 1,930-2,533). A response with none of
+these fields is counted by summing all its strings (over-counting is cheaper than missing silently). When the total
 crosses the threshold, and then once at each multiple (2x, 3x ...), this note is added:
 
 > The main session has collected ~41k characters of read/command output this session. Delegate exploration and verification to explorer/scanner (orchestration > Delegation).
 
 - Threshold: `ORCH_OKUMA_ESIGI` (characters, default 40000). Rationale: in a measurement the main session's Bash work
   output was twice the size of the subagent results; the measured median starting context was about 80k tokens.
+  That measurement counted every field of the response, so it may be inflated by `bashEditDiff`; not yet re-measured
+  with the allowlist.
 - Silent inside a subagent (a helper agent opened by the main session). A subagent's own reading is its job.
 - Not counted (Bash commands only): `git commit`, `git push`, a single-commit `git log` (`-1`, `-n 1`, `-n1` or
   `--max-count=1`; alongside only `--format=`, `--pretty=`, `--oneline`, `--date=`; any other flag such as `-p`,
@@ -136,8 +145,14 @@ separate subagents, or to state in one sentence why there is none. Silent inside
 - Off switch: `ORCH_PARALEL_HATIRLATICI=0` (no reminder, no log line).
 - Threshold quoted in the reminder: `ORCH_PARALEL_ESIK` (concurrent agents, default 15; an invalid or non-positive
   value falls back to 15).
-- Each trigger writes one tab-separated line (time, session id, tool) to `paralel-is-hatirlatici.log` in
-  `$ORCH_LOG_DIR`, else `$CLAUDE_PLUGIN_DATA` / `$PLUGIN_DATA`, else `~/.claude/hooks/`.
+- Each trigger writes one tab-separated line (time, session id, tool, `subagent_type`, the first 60 characters of
+  `description`) to `paralel-is-hatirlatici.log` in `$ORCH_LOG_DIR`, else `$CLAUDE_PLUGIN_DATA` / `$PLUGIN_DATA`, else
+  `~/.claude/hooks/`.
+- Same turn: a trigger within 5 s of the session's last warning (agents started in parallel in one message) does not
+  warn again but is still logged. The window runs from the last warning, so a suppressed trigger does not extend it.
+  The last warning time is kept in `paralel-is/<session_id>.json` under `$ORCH_LOG_DIR`, else the plugin data folder,
+  else `${XDG_CACHE_HOME:-$HOME/.cache}/orchestration/`, read and written under a `flock` lock; files older than 7 days
+  are removed. If the state cannot be written, or on any unexpected error, the hook warns; the exit code is always 0.
 
 ### kanca_girdisi.py
 
@@ -216,8 +231,10 @@ The tests run the hooks in a subprocess with the real input format; they use tem
   `session_meta`, the distinction is undetermined and the call is not counted (silent): a false warning costs more
   than a missed one. The price is that a warning can be missed in a Codex main session with an unreadable
   transcript. Which transcript Codex passes in a subagent's PostToolUse is not documented and not verified.
-- The `tool_response` shape for Read, Grep and Glob is not fully documented; the hook sums the length of every
-  string in the response.
+- The `tool_response` shapes are not documented; they were measured from transcripts (2026-11-08): Grep
+  `{content, filenames, mode, numFiles, ...}` (n=32), Glob `{filenames, ...}` (n=3); in Grep content mode the count
+  matches what the model sees, `filenames` is empty, no double count (30 results). If the shape differs, the fallback
+  sums every string in the response.
 - Load reminder: if Skill and a subagent are called in parallel in the same message, the Skill result may not be in
   the transcript yet; one false warning can appear. In a resumed session an earlier load also counts. In Codex, if
   the transcript header cannot be read, the call is treated as a subagent and the warning can be missed (same policy

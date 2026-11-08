@@ -46,6 +46,12 @@ class CodexOkumaButcesi(unittest.TestCase):
         self.assertIn("~2k", baglam(p))
         self.assertEqual(json.loads(p.stdout)["hookSpecificOutput"]["hookEventName"], "PostToolUse")
 
+    def test_kabuk_metni_oldugu_gibi_sayilir(self):
+        # Codex shell output is plain text: counted as is, not through the Claude Code field allowlist.
+        self.k(codex_bash("x" * 700, dokum=self.ana_dokum()))
+        durum = json.loads((self.kok / "cache" / "orchestration" / "okuma" / "019a-ana.json").read_text())
+        self.assertEqual(durum["toplam"], 700)
+
     def test_arguman_olmadan_turn_id_ile_codex(self):
         ana = self.dokum("ana.jsonl", {"id": "019a-ana", "source": "cli"})
         self.assertIsNotNone(baglam(self.k(codex_bash("x" * 1500, dokum=ana), argumanlar=())))

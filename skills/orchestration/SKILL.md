@@ -79,26 +79,29 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
   Active (goes to a subagent): exploring by reading files (`cat`, `sed -n`, `grep`, Read), running tests, converting
   documents (pandoc, textutil), editing code or deliverables. If a subagent's evidence is missing, the main session
   does not run its own grep; it opens a fresh reviewer.
-- **Read-budget hook** `hooks/okuma_butcesi.py` (PostToolUse; only adds a note, never blocks) sums the main session's
-  Read/Bash/Grep/Glob output per session (in Codex, shell commands only). When the total crosses `ORCH_OKUMA_ESIGI`
-  (default 40000 characters) and then each multiple, it adds a note to delegate exploration and verification to
-  explorer/scanner. Silent inside subagents. Not counted: `git commit` / `git push` / `git log -1`, `codex exec`,
-  `aile_elestirmen.py`, extra scripts in `ORCH_MUAF_BETIKLER` (comma-separated file names, e.g. your own notes CLI),
-  heredocs writing to `.md`, `--help` / `--version` (compound-command and `git log` details: `hooks/README.md`). Off:
-  `ORCH_OKUMA_BUTCESI=0`. Registration: see README; timeouts 5 s (PostToolUse) and 10 s (SessionStart) in both apps.
-  Threshold [measured 2026-11-07, n=107 main sessions]: median Agent result 16k, median Bash work output 44k
-  characters; 40k sits between them and warns about half the sessions. why: without a definition of "active work",
-  Bash reading stayed the main session's largest work class.
+- **Read-budget hook** `hooks/okuma_butcesi.py` (PostToolUse; only adds a note, never blocks) sums, per session, only
+  the fields of the main session's Read/Bash/Grep/Glob output that reach the model (Bash `stdout` + `stderr`, Read
+  file content; the `bashEditDiff` field Claude Code adds is not counted; in Codex, shell commands only). When the
+  total crosses `ORCH_OKUMA_ESIGI` (default 40000 characters) and then each multiple, it adds a note to delegate
+  exploration and verification to explorer/scanner. Silent inside subagents. Not counted: `git commit` / `git push` /
+  `git log -1`, `codex exec`, `aile_elestirmen.py`, extra scripts in `ORCH_MUAF_BETIKLER` (comma-separated file names,
+  e.g. your own notes CLI), heredocs writing to `.md`, `--help` / `--version` (compound-command and `git log` details:
+  `hooks/README.md`). Off: `ORCH_OKUMA_BUTCESI=0`. Registration: see README; timeouts 5 s (PostToolUse) and 10 s
+  (SessionStart) in both apps. Threshold [measured 2026-11-07, n=107 main sessions]: median Agent result 16k, median
+  Bash work output 44k characters; 40k sits between them and warns about half the sessions (that measurement counted
+  every response field, so it may be inflated by `bashEditDiff`; not yet re-measured with the allowlist). why: without
+  a definition of "active work", Bash reading stayed the main session's largest work class.
 - **Load reminder.** If the main session opens a subagent and this skill was not loaded in that session,
   `hooks/orkestrasyon_hatirlatici.py` (PreToolUse; Claude `Agent|Task`, Codex `^(spawn_agent|Agent)$`) reminds once
   and never blocks. Off: `ORCH_HATIRLATICI=0`. In Claude the note (additionalContext) arrives with the first Agent
   call's result, so it shapes the later spawns, not the first one. [measured 2026-11-07, n=152 main sessions: 44.7%
   loaded on their own, 11.2% user-triggered, 44.1% never loaded (mostly single-agent sessions)]
-- **Multiply independent work.** Extract dependencies before dispatching; independent tasks, scenarios or questions
-  go to separate subagents in parallel (separate folder/worktree, separate result file, merge in the main session).
-  In Claude Code `hooks/paralel-is-hatirlatici.py` (PostToolUse `Agent|Task`) asks on every agent start "is there
-  work that does not wait for this agent?". When it fires, either start the independent work in the same turn or tell
-  the user why not in one sentence; a sequential engine step needs no reason. Off: `ORCH_PARALEL_HATIRLATICI=0`.
+- **Multiply independent work.** Extract dependencies before dispatching; independent tasks, scenarios or questions go
+  to separate subagents in parallel (separate folder/worktree, separate result file, merge in the main session). In
+  Claude Code `hooks/paralel-is-hatirlatici.py` (PostToolUse `Agent|Task`) asks on every agent start "is there work
+  that does not wait for this agent?" (once per message: starts within 5 s of the last warning stay silent). When it
+  fires, either start the independent work in the same turn or tell the user why not in one sentence; a sequential
+  engine step needs no reason. Off: `ORCH_PARALEL_HATIRLATICI=0`.
 
 ### Who decides
 

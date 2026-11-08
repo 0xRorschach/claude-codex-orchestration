@@ -3,13 +3,15 @@
 log is touched."""
 import json
 import os
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
-from ortak import baglam, kos  # noqa: E402
+from ortak import ATILAN, KANCA_DIZINI, baglam, kos  # noqa: E402
 
 KAPI = "agent-tip-kapisi.py"
 HATIRLATICI = "paralel-is-hatirlatici.py"
@@ -208,14 +210,14 @@ class ParalelIsHatirlatici(TempOrtam):
     def test_gecersiz_esik_varsayilana_doner(self):
         for deger in ("abc", "0", "-3"):
             with self.subTest(deger=deger):
-                p = self.k(self.girdi(), dict(self.env, ORCH_PARALEL_ESIK=deger))
+                p = self.k(self.girdi(session_id="esik-" + deger), dict(self.env, ORCH_PARALEL_ESIK=deger))
                 self.assertIn("threshold: 15 concurrent", baglam(p))
 
     def test_gunluk_gecici_dizine_yazilir(self):
         self.k(self.girdi())
         satirlar = (self.log_dizini / "paralel-is-hatirlatici.log").read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(satirlar), 1)
-        self.assertEqual(satirlar[0].split("\t")[1:], ["s1", "Agent"])
+        self.assertEqual(satirlar[0].split("\t")[1:], ["s1", "Agent", "worker", ""])
         self.assertFalse((self.kok / ".claude").exists(), "the default log path must not be used")
 
     def test_varsayilan_gunluk_yolu_home_altinda(self):
@@ -241,6 +243,66 @@ class ParalelIsHatirlatici(TempOrtam):
     def test_bozuk_stdin_sessiz(self):
         p = kos(HATIRLATICI, None, self.env, ham_girdi="")
         self.assertEqual((p.returncode, p.stdout), (0, ""))
+
+    def durum(self, sid="s1"):
+        return self.log_dizini / "paralel-is" / (sid + ".json")
+
+    def test_ayni_turda_tek_uyari_iki_gunluk_satiri(self):
+        self.assertIsNotNone(baglam(self.k(self.girdi())))
+        self.assertIsNone(baglam(self.k(self.girdi())))  # within 5 s of the last warning: suppressed
+        satirlar = (self.log_dizini / "paralel-is-hatirlatici.log").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(satirlar), 2, "a suppressed trigger is still logged")
+
+    def test_pencere_gecince_yeniden_uyarir(self):
+        self.k(self.girdi())
+        son = json.loads(self.durum().read_text())["son_uyari"]
+        self.durum().write_text(json.dumps({"son_uyari": son - 10}))
+        self.assertIsNotNone(baglam(self.k(self.girdi())))
+        self.assertGreater(json.loads(self.durum().read_text())["son_uyari"], son - 10)
+
+    def test_bastirilan_tetikleme_pencereyi_uzatmaz(self):
+        self.durum().parent.mkdir(parents=True)
+        self.durum().write_text(json.dumps({"son_uyari": time.time() - 3}))
+        self.assertIsNone(baglam(self.k(self.girdi())))
+        self.assertLess(json.loads(self.durum().read_text())["son_uyari"], time.time() - 2)
+
+    def test_farkli_oturum_bagimsiz(self):
+        self.assertIsNotNone(baglam(self.k(self.girdi())))
+        self.assertIsNotNone(baglam(self.k(self.girdi(session_id="s2"))))
+        self.assertIsNone(baglam(self.k(self.girdi(session_id="s2"))))
+
+    def test_es_zamanli_cagrilarda_tek_uyari(self):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("ORCH_") and k not in ATILAN}
+        env.update(self.env)
+        veri = json.dumps(self.girdi(session_id="es"))
+        surecler = [subprocess.Popen([sys.executable, str(KANCA_DIZINI / HATIRLATICI)], stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+                    for _ in range(6)]
+        ciktilar = [s.communicate(veri, timeout=30) for s in surecler]
+        self.assertEqual([s.returncode for s in surecler], [0] * 6)
+        self.assertEqual(sum(1 for c, _ in ciktilar if c.strip()), 1)
+
+    def test_gunluk_satirinda_tip_ve_aciklama(self):
+        aciklama = "Port\tthe read\nbudget " + "x" * 80
+        self.k(self.girdi(tool_input={"subagent_type": "explorer", "description": aciklama, "prompt": "p"}))
+        satir = (self.log_dizini / "paralel-is-hatirlatici.log").read_text(encoding="utf-8").splitlines()[0]
+        alanlar = satir.split("\t")
+        self.assertEqual(len(alanlar), 5)
+        self.assertEqual(alanlar[3], "explorer")
+        self.assertEqual(alanlar[4], ("Port the read budget " + "x" * 80)[:60])
+
+    def test_durum_yazilamazsa_uyarir(self):
+        self.log_dizini.mkdir()
+        (self.log_dizini / "paralel-is").write_text("not a folder")
+        p = self.k(self.girdi())
+        self.assertIn("[parallel-work hook]", baglam(p))
+
+    def test_beklenmeyen_girdi_cikis_sifir(self):
+        for ham in ("[1, 2]", '"metin"', "{\"session_id\": 5, \"tool_input\": [1]}"):
+            with self.subTest(ham=ham):
+                p = kos(HATIRLATICI, None, self.env, ham_girdi=ham)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertEqual(p.stderr, "")
 
 
 if __name__ == "__main__":

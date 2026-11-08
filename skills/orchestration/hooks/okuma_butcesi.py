@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """PostToolUse hook (Read|Bash|Grep|Glob): accumulates the main session's own read/command output per session.
+Only the response fields that reach the model are counted (allowlist in MODEL_ALANLARI, see uzunluk).
 
 Why: in orchestration the main session coordinates; exploration and verification go to subagents. In a measurement
 the main session's Bash work output was twice the size of the subagent results; the rule was written down but not
@@ -227,16 +228,52 @@ def muaf_mi(komut):
     return bool(parcalar) and all(parca_muaf_mi(p) for p in parcalar)
 
 
-def uzunluk(deger):
-    """Total length of all strings in tool_response. The Read/Grep/Glob response shape is not fully documented; a
-    recursive sum counts any shape. The documented shape for Bash is {stdout, stderr, interrupted, isImage}."""
+# Fields that reach the model (allowlist). Why: Claude Code adds `bashEditDiff` (the diff of the change a command made
+# to a file) to the Bash response; the model never sees it, and in a measured session it was most of what the old
+# recursive sum counted. Shapes measured from `toolUseResult` in transcripts (2026-11-08): Bash {stdout, stderr, ...},
+# Read {type, file: {content, ...}}, Grep {content, filenames, mode, numFiles, ...} (n=32), Glob {filenames, ...}
+# (n=3); in Grep content mode the count matches what the model sees, filenames is empty, no double count (30 results).
+MODEL_ALANLARI = {"Bash": ("stdout", "stderr"), "Grep": ("content", "filenames"), "Glob": ("filenames",)}
+# Claude Code saves large Bash output to a file and sends the model a short preview; the response then carries
+# `persistedOutputPath`. 2500: measured (n=8, 14 days, 2026-11-08) counted stdout 27,618-30,000 characters, preview
+# sent to the model 1,930-2,533; set near the top of that range.
+ONIZLEME_AZAMI = 2500
+
+
+def _toplam(deger):
+    """Total length of all strings in a nested structure (the old behaviour; used only as the fallback)."""
     if isinstance(deger, str):
         return len(deger)
     if isinstance(deger, dict):
-        return sum(uzunluk(v) for v in deger.values())
+        return sum(_toplam(v) for v in deger.values())
     if isinstance(deger, (list, tuple)):
-        return sum(uzunluk(v) for v in deger)
+        return sum(_toplam(v) for v in deger)
     return 0
+
+
+def uzunluk(deger, arac=None):
+    """Length of the text in tool_response that reaches the model. A plain-text response (Codex shell output, an
+    error text) is counted as is. For Read only `file.content`; an image (`base64`) is not characters and counts 0.
+    For Bash with `persistedOutputPath`, stdout counts at most ONIZLEME_AZAMI (the preview the model gets).
+    An unknown shape (none of the allowed fields present) falls back to the recursive sum: over-counting brings the
+    warning early, under-counting misses it silently; the first is the cheaper error."""
+    if isinstance(deger, str):
+        return len(deger)
+    if not isinstance(deger, dict):
+        return _toplam(deger)
+    if arac == "Read" and isinstance(deger.get("file"), dict):
+        dosya = deger["file"]
+        if isinstance(dosya.get("content"), str):
+            return len(dosya["content"])
+        if deger.get("type") == "image" or "base64" in dosya:
+            return 0  # an image does not reach the model as characters
+        return _toplam(deger)  # unknown Read shape (e.g. PDF parts): fallback
+    if arac == "Bash" and deger.get("persistedOutputPath") and isinstance(deger.get("stdout"), str):
+        return min(len(deger["stdout"]), ONIZLEME_AZAMI) + _toplam(deger.get("stderr"))
+    alanlar = MODEL_ALANLARI.get(arac, ())
+    if any(a in deger for a in alanlar):
+        return sum(_toplam(deger.get(a)) for a in alanlar)
+    return _toplam(deger)
 
 
 def esik():
@@ -308,7 +345,7 @@ def main():
         return
     if veri.get("tool_name") == "Bash" and muaf_mi(str((veri.get("tool_input") or {}).get("command") or "")):
         return
-    miktar = uzunluk(veri.get("tool_response"))
+    miktar = uzunluk(veri.get("tool_response"), veri.get("tool_name"))
     sid = re.sub(r"[^A-Za-z0-9_-]", "", str(veri.get("session_id") or "")) or "unknown"
 
     dizin = durum_dizini()
