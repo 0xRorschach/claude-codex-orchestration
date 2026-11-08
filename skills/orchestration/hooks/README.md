@@ -41,16 +41,16 @@ Where the installed version is read from:
 
 ### okuma_butcesi.py (PostToolUse)
 
-Sums, per session, the character count of the text that reaches the model in the main session's Read, Bash, Grep
-and Glob output (allowlist: Bash `stdout` + `stderr`; Read `file.content`; Grep `content` + `filenames`; Glob
-`filenames`; Codex shell output is plain text and is counted as is). Read counts the raw `file.content`; the line
-number prefix the model sees (`cat -n` style) is not added, so Read is slightly under-counted (not measured). The `bashEditDiff` field that Claude Code adds to
-the Bash response does not reach the model and is not counted. A Read image (`base64`) counts 0; another Read shape
-without `content` (PDF parts, for example) falls back to the recursive sum. Claude Code saves large Bash output to a
-file and sends the model a short preview (the response carries `persistedOutputPath`); stdout then counts at most 2500
-characters (measured n=8: counted 27,618-30,000, preview sent to the model 1,930-2,533). A response with none of
-these fields is counted by summing all its strings (over-counting is cheaper than missing silently). When the total
-crosses the threshold, and then once at each multiple (2x, 3x ...), this note is added:
+Sums, per session, the character count of the text that reaches the model in the main session's Read, Bash, Grep and
+Glob output (allowlist: Bash `stdout` + `stderr`; Read `file.content`; Grep `content` + `filenames`; Glob `filenames`;
+Codex shell output is plain text and is counted as is). Read counts the raw `file.content`; the line number prefix the
+model sees (`cat -n` style) is not added, so Read is slightly under-counted (not measured). The `bashEditDiff` field
+that Claude Code adds to the Bash response does not reach the model and is not counted. A Read image (`base64`) counts
+0; another Read shape without `content` (PDF parts, for example) falls back to the recursive sum. Claude Code saves
+large Bash output to a file and sends the model a short preview (the response carries `persistedOutputPath`); stdout
+then counts at most 2500 characters (measured n=8: counted 27,618-30,000, preview sent to the model 1,930-2,533). A
+response with none of these fields is counted by summing all its strings (over-counting is cheaper than missing
+silently). When the total crosses the threshold, and then once at each multiple (2x, 3x ...), this note is added:
 
 > The main session has collected ~41k characters of read/command output this session. Delegate exploration and verification to explorer/scanner (orchestration > Delegation).
 

@@ -279,8 +279,9 @@ class ParalelIsHatirlatici(TempOrtam):
         env.update(self.env)
         veri = json.dumps(self.girdi(session_id="es"))
         adet = 12
-        # All processes are started first and block on stdin; a barrier then releases the input to all of them at
-        # once, so their read-check-write steps on the state file overlap (communicate() in a loop would not).
+        # Smoke test across many processes: all exit 0 and exactly one warns. Their read-check-write steps rarely
+        # overlap in practice (it also passes with flock removed); the lock itself is proven by
+        # test_kilit_okuma_yazmayi_siralar.
         surecler = [subprocess.Popen([sys.executable, str(KANCA_DIZINI / HATIRLATICI)], stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
                     for _ in range(adet)]
