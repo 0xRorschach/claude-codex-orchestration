@@ -77,16 +77,17 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
   alt ajanın kanıtı eksikse ana oturum kendi grep'ini koşmaz; taze bir inceleyici açar.
 - **Okuma bütçesi kancası** `hooks/okuma_butcesi.py` (PostToolUse; yalnız not ekler, hiç engellemez) ana oturumun
   Read/Bash/Grep/Glob çıktısında yalnız modele giden alanları oturum başına toplar (Bash `stdout` + `stderr`, Read
-  dosya içeriği; Claude Code'un eklediği `bashEditDiff` alanı sayılmaz; Codex'te yalnız kabuk komutları). Toplam
-  `ORCH_OKUMA_ESIGI` değerini (varsayılan 40000 karakter) ve sonra her katını geçince keşif ile doğrulamayı
-  explorer/scanner'a devretme notu ekler. Alt ajanların içinde sessizdir. Sayılmayanlar: `git commit` / `git push` /
-  `git log -1`, `codex exec`, `aile_elestirmen.py`, `ORCH_MUAF_BETIKLER` içindeki ek script'ler (virgülle ayrılmış
-  dosya adları, ör. kendi not CLI'n), `.md`'ye yazan heredoc'lar, `--help` / `--version` (bileşik komut ve `git log`
-  ayrıntısı: `hooks/README.md`). `ORCH_OKUMA_BUTCESI=0` kancayı kapatır. Kayıt için bkz. README; zaman aşımı iki
-  uygulamada da 5 s (PostToolUse) ve 10 s (SessionStart). Eşik [ölçüm 2026-11-07, n=107 ana oturum]: Agent sonucu
-  medyanı 16k, Bash iş çıktısı medyanı 44k karakter; 40k ikisinin arasında durur ve oturumların yaklaşık yarısında
-  uyarır (bu ölçüm yanıttaki bütün alanları saydığı için `bashEditDiff` ile şişmiş olabilir; izin listesiyle henüz
-  yeniden ölçülmedi). neden: "aktif iş" tanımı olmadan Bash ile okuma ana oturumun en büyük iş sınıfı olarak kaldı.
+  dosya içeriği, modelin gördüğü satır numarası öneki hariç, bu yüzden hafif eksik sayılır; Claude Code'un eklediği
+  `bashEditDiff` alanı sayılmaz; Codex'te yalnız kabuk komutları). Toplam `ORCH_OKUMA_ESIGI` değerini (varsayılan
+  40000 karakter) ve sonra her katını geçince keşif ile doğrulamayı explorer/scanner'a devretme notu ekler. Alt
+  ajanların içinde sessizdir. Sayılmayanlar: `git commit` / `git push` / `git log -1`, `codex exec`,
+  `aile_elestirmen.py`, `ORCH_MUAF_BETIKLER` içindeki ek script'ler (virgülle ayrılmış dosya adları, ör. kendi not
+  CLI'n), `.md`'ye yazan heredoc'lar, `--help` / `--version` (bileşik komut ve `git log` ayrıntısı:
+  `hooks/README.md`). `ORCH_OKUMA_BUTCESI=0` kancayı kapatır. Kayıt için bkz. README; zaman aşımı iki uygulamada da
+  5 s (PostToolUse) ve 10 s (SessionStart). Eşik [ölçüm 2026-11-07, n=107 ana oturum]: Agent sonucu medyanı 16k, Bash iş
+  çıktısı medyanı 44k karakter; 40k ikisinin arasında durur ve oturumların yaklaşık yarısında uyarır (bu ölçüm
+  yanıttaki bütün alanları saydığı için `bashEditDiff` ile şişmiş olabilir; izin listesiyle henüz yeniden ölçülmedi).
+  neden: "aktif iş" tanımı olmadan Bash ile okuma ana oturumun en büyük iş sınıfı olarak kaldı.
 - **Yükleme hatırlatıcısı.** Ana oturum bir alt ajan açarsa ve bu skill o oturumda yüklenmemişse
   `hooks/orkestrasyon_hatirlatici.py` (PreToolUse; Claude `Agent|Task`, Codex `^(spawn_agent|Agent)$`) bir kez hatırlatır
   ve hiç engellemez. `ORCH_HATIRLATICI=0` kancayı kapatır. Claude'da not (additionalContext) ilk Agent çağrısının sonucuyla
@@ -95,8 +96,9 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
 - **Bağımsız işi çoğalt.** Dağıtmadan önce bağımlılıkları çıkar; bağımsız görevler, senaryolar ya da sorular ayrı alt
   ajanlara paralel gider (ayrı klasör/worktree, ayrı sonuç dosyası, birleştirme ana oturumda). Claude Code'da
   `hooks/paralel-is-hatirlatici.py` (PostToolUse `Agent|Task`) her ajan başlangıcında "bu ajanı beklemeyen iş var mı?"
-  diye sorar (mesaj başına bir kez: son uyarıdan 5 sn içindeki başlangıçlar sessiz kalır). Uyarı gelince ya bağımsız
-  işi aynı turda başlat ya da neden başlatmadığını kullanıcıya tek cümleyle söyle; sıralı motor adımı gerekçe istemez.
+  diye sorar (son uyarıdan 5 sn içinde tamamlanan çağrılar sessiz kalır: arka planda birlikte başlatılan ajanlar tek
+  uyarı alır, farklı zamanlarda biten ön plan ajanları ayrı ayrı uyarabilir). Uyarı gelince ya bağımsız işi aynı turda
+  başlat ya da neden başlatmadığını kullanıcıya tek cümleyle söyle; sıralı motor adımı gerekçe istemez.
   `ORCH_PARALEL_HATIRLATICI=0` kancayı kapatır.
 
 ### Karar kimde

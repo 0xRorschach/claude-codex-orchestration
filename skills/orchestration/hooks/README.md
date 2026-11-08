@@ -43,7 +43,8 @@ Where the installed version is read from:
 
 Sums, per session, the character count of the text that reaches the model in the main session's Read, Bash, Grep
 and Glob output (allowlist: Bash `stdout` + `stderr`; Read `file.content`; Grep `content` + `filenames`; Glob
-`filenames`; Codex shell output is plain text and is counted as is). The `bashEditDiff` field that Claude Code adds to
+`filenames`; Codex shell output is plain text and is counted as is). Read counts the raw `file.content`; the line
+number prefix the model sees (`cat -n` style) is not added, so Read is slightly under-counted (not measured). The `bashEditDiff` field that Claude Code adds to
 the Bash response does not reach the model and is not counted. A Read image (`base64`) counts 0; another Read shape
 without `content` (PDF parts, for example) falls back to the recursive sum. Claude Code saves large Bash output to a
 file and sends the model a short preview (the response carries `persistedOutputPath`); stdout then counts at most 2500
@@ -148,8 +149,9 @@ separate subagents, or to state in one sentence why there is none. Silent inside
 - Each trigger writes one tab-separated line (time, session id, tool, `subagent_type`, the first 60 characters of
   `description`) to `paralel-is-hatirlatici.log` in `$ORCH_LOG_DIR`, else `$CLAUDE_PLUGIN_DATA` / `$PLUGIN_DATA`, else
   `~/.claude/hooks/`.
-- Same turn: a trigger within 5 s of the session's last warning (agents started in parallel in one message) does not
-  warn again but is still logged. The window runs from the last warning, so a suppressed trigger does not extend it.
+- Same turn: a trigger within 5 s of the session's last warning does not warn again but is still logged. This
+  groups agent calls that complete at about the same time (for example agents started in the background in one
+  message) into one warning; foreground agents of the same message that finish at different times can each warn. The window runs from the last warning, so a suppressed trigger does not extend it.
   The last warning time is kept in `paralel-is/<session_id>.json` under `$ORCH_LOG_DIR`, else the plugin data folder,
   else `${XDG_CACHE_HOME:-$HOME/.cache}/orchestration/`, read and written under a `flock` lock; files older than 7 days
   are removed. If the state cannot be written, or on any unexpected error, the hook warns; the exit code is always 0.

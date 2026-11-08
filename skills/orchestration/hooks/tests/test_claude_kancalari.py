@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -262,9 +263,11 @@ class ParalelIsHatirlatici(TempOrtam):
 
     def test_bastirilan_tetikleme_pencereyi_uzatmaz(self):
         self.durum().parent.mkdir(parents=True)
-        self.durum().write_text(json.dumps({"son_uyari": time.time() - 3}))
+        # 1 s back leaves 4 s of the 5 s window for process start-up; the stored time must stay exactly as written.
+        son = time.time() - 1
+        self.durum().write_text(json.dumps({"son_uyari": son}))
         self.assertIsNone(baglam(self.k(self.girdi())))
-        self.assertLess(json.loads(self.durum().read_text())["son_uyari"], time.time() - 2)
+        self.assertEqual(json.loads(self.durum().read_text())["son_uyari"], son)
 
     def test_farkli_oturum_bagimsiz(self):
         self.assertIsNotNone(baglam(self.k(self.girdi())))
@@ -275,12 +278,58 @@ class ParalelIsHatirlatici(TempOrtam):
         env = {k: v for k, v in os.environ.items() if not k.startswith("ORCH_") and k not in ATILAN}
         env.update(self.env)
         veri = json.dumps(self.girdi(session_id="es"))
+        adet = 12
+        # All processes are started first and block on stdin; a barrier then releases the input to all of them at
+        # once, so their read-check-write steps on the state file overlap (communicate() in a loop would not).
         surecler = [subprocess.Popen([sys.executable, str(KANCA_DIZINI / HATIRLATICI)], stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-                    for _ in range(6)]
-        ciktilar = [s.communicate(veri, timeout=30) for s in surecler]
-        self.assertEqual([s.returncode for s in surecler], [0] * 6)
+                    for _ in range(adet)]
+        engel = threading.Barrier(adet)
+        ciktilar = [None] * adet
+
+        def gonder(i):
+            engel.wait()
+            ciktilar[i] = surecler[i].communicate(veri, timeout=30)
+
+        iplikler = [threading.Thread(target=gonder, args=(i,)) for i in range(adet)]
+        for t in iplikler:
+            t.start()
+        for t in iplikler:
+            t.join()
+        self.assertEqual([s.returncode for s in surecler], [0] * adet)
         self.assertEqual(sum(1 for c, _ in ciktilar if c.strip()), 1)
+
+    def test_kilit_okuma_yazmayi_siralar(self):
+        # In-process lock test: json.loads is replaced by a slow version, so each call pauses between reading the
+        # state and writing it. Without flock every thread would read the empty file and warn; with the lock exactly
+        # one warns. (Threads use separate os.open descriptions, so flock serialises them as it does processes.)
+        import importlib.util
+        import types
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("paralel_kanca", str(KANCA_DIZINI / HATIRLATICI))
+        modul = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modul)
+
+        def yavas_loads(metin):
+            time.sleep(0.05)
+            return json.loads(metin)
+
+        modul.json = types.SimpleNamespace(loads=yavas_loads, dumps=json.dumps)
+        adet = 8
+        engel = threading.Barrier(adet)
+        sonuclar = [None] * adet
+
+        def cagir(i):
+            engel.wait()
+            sonuclar[i] = modul.ayni_tur_mu("kilit")
+
+        with mock.patch.dict(os.environ, {"ORCH_LOG_DIR": str(self.log_dizini)}):
+            iplikler = [threading.Thread(target=cagir, args=(i,)) for i in range(adet)]
+            for t in iplikler:
+                t.start()
+            for t in iplikler:
+                t.join()
+        self.assertEqual(sonuclar.count(False), 1, sonuclar)  # False = this call warns
 
     def test_gunluk_satirinda_tip_ve_aciklama(self):
         aciklama = "Port\tthe read\nbudget " + "x" * 80
