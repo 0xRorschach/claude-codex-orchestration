@@ -154,7 +154,7 @@ class Base(unittest.TestCase):
 
 
 ROLES = ["explorer.toml", "researcher.toml", "scanner.toml", "worker.toml"]
-AGENTS = ["explorer.md", "researcher.md", "scanner.md", "worker.md"]
+AGENTS = ["explorer.md", "fable-reviewer.md", "researcher.md", "scanner.md", "worker.md"]
 
 
 class TestPluginMode(Base):
@@ -168,7 +168,7 @@ class TestPluginMode(Base):
         self.assertIn("/hooks", p.stdout)
         d = self.ok(self.sh("claude", "plugin", "details", PLUGIN_ID)).stdout
         self.assertIn("Skills (1)", d)
-        self.assertIn("Agents (4)", d)
+        self.assertIn("Agents (5)", d)
         self.assertIn("SessionStart, PreToolUse, PostToolUse", d)
         pi = self.ok(self.sh("codex", "debug", "prompt-input", "x")).stdout
         self.assertRegex(pi, r"file: r\d+/orchestration/[^/]+/skills/orchestration/SKILL\.md")
@@ -482,7 +482,7 @@ class TestRecord(FakeTools):
         kinds = {}
         for i in rec["items"]:
             kinds[i["kind"]] = kinds.get(i["kind"], 0) + 1
-        self.assertEqual((kinds["file"], kinds["tree"], kinds["link"], kinds["json"]), (8, 1, 1, 8))
+        self.assertEqual((kinds["file"], kinds["tree"], kinds["link"], kinds["json"]), (9, 1, 1, 8))
         worker = self.claude_dir / "agents" / "worker.md"
         item = next(i for i in rec["items"] if i.get("path") == str(worker))
         self.assertEqual(item["sha256"], hashlib.sha256(worker.read_bytes()).hexdigest())

@@ -9,9 +9,9 @@ Static version: [docs/assets/orchestration-flow.svg](docs/assets/orchestration-f
 ## What it does
 
 - **The main session orchestrates.** It plans, decides, writes briefs, reviews what comes back and synthesizes one answer. It does no hands-on work (exploring, editing, testing); that goes to subagents, so its context stays free for coordination.
-- **Typed subagents** at medium effort: `explorer` (read-only judgement: code review, spec checks), `worker` (applies a decided change and runs its tests), `researcher` (checks current library, API and CLI behaviour), `scanner` (fast read-only search, maps and output summaries). General-purpose agent types are not used.
+- **Typed subagents** at medium effort: `explorer` (read-only judgement: code review, spec checks), `worker` (applies a decided change and runs its tests), `researcher` (checks current library, API and CLI behaviour), `scanner` (fast read-only search, maps and output summaries). On Claude Code a fifth, `fable-reviewer` (Fable at high effort, read-only), is used for two jobs only: the final whole-branch review and the final read of a plan or spec before it goes to the user; Codex uses a fresh `explorer` for both. General-purpose agent types are not used.
 - **K1: same-family review** after each task, by a fresh subagent.
-- **K2: cross-family critic.** From a Claude session the work goes to Codex (Astra or Sol); from a Codex session it goes to Claude Opus. It runs through `skills/orchestration/scripts/aile_elestirmen.py` and is mandatory for multi-task plans, multi-file changes, schema or gate changes and outbound output.
+- **K2: cross-family critic.** From a Claude session the work goes to Codex (Astra or Sol); from a Codex session it goes to Claude Opus. It runs through `skills/orchestration/scripts/aile_elestirmen.py` and is mandatory for multi-task plans, multi-file changes, schema or gate changes and outbound output. With `--kayit` it writes one record line to the project ledger; `skills/orchestration/scripts/elestirmen_kayit_eki.py` later appends the decision (`· applied / parked (why)`) to that same line, under a shared lock.
 - **Advisor** (Claude only, optional): consulted before declaring work done.
 - **Irreversible actions** (push, deleting untracked files, writing outside the workspace or to an external system) need the user's approval.
 - **Hooks:** agent-type gate, parallel-work reminder, read budget for the main session, superpowers version guard, and a load reminder when a subagent is opened before the skill was loaded.
@@ -52,7 +52,7 @@ From the shell:
 claude plugin install orchestration --marketplace 0xRorschach/claude-codex-orchestration
 ```
 
-Plugin agents appear with the plugin prefix: `orchestration:explorer`, `orchestration:worker`, `orchestration:researcher`, `orchestration:scanner`. The agent-type gate checks the last part, so these pass.
+Plugin agents appear with the plugin prefix: `orchestration:explorer`, `orchestration:worker`, `orchestration:researcher`, `orchestration:scanner`, `orchestration:fable-reviewer`. The agent-type gate checks the last part, so these pass.
 
 ### Codex
 
@@ -185,6 +185,7 @@ File and environment variable names are Turkish in origin and kept on purpose: r
 |---|---|
 | `okuma_butcesi` | read budget |
 | `aile_elestirmen` | family critic |
+| `elestirmen_kayit_eki` | critic record suffix |
 | `paralel-is-hatirlatici` | parallel-work reminder |
 | `agent-tip-kapisi` | agent-type gate |
 | `superpowers_surum_bekcisi` | superpowers version guard |

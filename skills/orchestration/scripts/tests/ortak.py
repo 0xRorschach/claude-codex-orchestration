@@ -1,4 +1,5 @@
 """Shared test setup: a temporary "real" CODEX_HOME, a fake codex, an event folder. The real ~/.codex is not touched."""
+import hashlib
 import json
 import os
 import shutil
@@ -18,6 +19,13 @@ SAHTE_CLAUDE = TESTLER / "sahte_claude.py"
 ILK_AUTH = b'{"tokens": "ilk"}'
 
 
+def beklenen_kilit(kayit) -> Path:
+    """Expected place of the record lock, computed independently of the script: $HOME/.cache/orchestration/kayit-kilit/<sha256[:16]>.lock."""
+    gercek = os.path.realpath(kayit)
+    ad = hashlib.sha256(gercek.encode("utf-8")).hexdigest()[:16]
+    return Path(os.environ["HOME"]) / ".cache" / "orchestration" / "kayit-kilit" / f"{ad}.lock"
+
+
 class SahteCodexTesti(unittest.TestCase):
     def setUp(self):
         self.kok = Path(tempfile.mkdtemp(prefix="orch-test-"))
@@ -30,6 +38,7 @@ class SahteCodexTesti(unittest.TestCase):
         self.argv_dosyasi = self.kok / "argv.json"
         self.olay_dizini = self.kok / "olaylar"
         ortam = {
+            "HOME": str(self.kok / "ev"),  # the record lock is written under ~/.cache; the real home is not touched
             "CODEX_HOME": str(self.gercek_ev),
             "ORCH_CODEX_BIN": str(SAHTE),
             "ORCH_CLAUDE_BIN": str(SAHTE_CLAUDE),

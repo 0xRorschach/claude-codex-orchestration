@@ -12,6 +12,7 @@ Python standard library and need Python 3.9+. Locks are taken with `fcntl`, so t
 | `gorsel_uret.py` | Produces a PNG with Codex's image tool |
 | `modeller.json` | Family name -> full Codex model id |
 | `elestirmen_sema.json` | JSON schema of the critique output |
+| `elestirmen_kayit_eki.py` | Appends the decision (`· applied / parked (why)`) to a cross-family record line |
 
 ## Use from Claude
 
@@ -61,13 +62,40 @@ is for reaching Codex's image tool from Claude.
 - **Output:** `{"zayiflik_var", "bulgular": [{"bulgu", "onem", "kanit", "oneri"}], "belirsizlik"}` (has weakness,
   findings: finding, severity, evidence, suggestion; uncertainty), with `onem` one of `yuksek` (high), `orta`
   (medium) or `dusuk` (low). A response that does not match the schema is written raw and the result counts as
-  `undetermined` (exit 3).
+  `undetermined` (exit 3). A valid result whose record lock could not be taken returns exit 6 (see Record lock).
 - **Record:** with `--kayit`, one line is appended to the file:
   `Cross-family 2026-01-02 03:04 · plan · astra (gpt-6-astra) · medium · findings 2 (high 1) · findings.json`
   The model field has the form `family (full id)` in both directions. In the Claude direction the full id is read
   from the event stream's `system/init` event; in the Codex direction the event stream does not carry the model, so
   the requested id from `modeller.json` is written. If no full id is found, only the family name is written. An
   invalid result writes `undetermined (<reason>)` in place of the findings count.
+  The record file is the project's STATE or ledger (the plan ledger in SDD), not a scratchpad: a scratchpad goes away
+  with the session, and the effect can no longer be counted.
+- **Decision suffix:** once the findings are weighed, the decision is appended to the end of the same line; no new line
+  is opened:
+  `python3 elestirmen_kayit_eki.py --kayit docs/STATE.md --zaman "2026-01-02 03:04" --olay "plan" --karar applied|parked [--neden "..."]`
+  (`--neden` is required for `parked`). The line is found by time + event (leading indentation and a `- ` list marker
+  are allowed; LF/CRLF is kept).
+
+  | Exit | Meaning |
+  |---|---|
+  | 0 | appended |
+  | 1 | line not found (also when the record file is missing) |
+  | 2 | usage error |
+  | 4 | several lines matched; fix the file by hand |
+  | 5 | the line already has a decision (`· applied`, `· not applied`, `· parked`); the one exception: `applied` is appended to a line whose only decision is `parked` (parked -> applied, once) |
+  | 6 | the record lock was not taken within 10 s, or the lock file could not be opened; nothing appended |
+  | 7 | the record could not be read (permissions, non-UTF-8 content, a folder and the like); distinct from "line not found" |
+
+  On every error code the file is left unchanged. The write goes through a temporary file + `os.replace`; the old file
+  mode is kept, and if the record is a symlink the real target is written and the link stays.
+- **Record lock:** the decision suffix (read-modify-write) and the `aile_elestirmen.py --kayit` append take the same
+  advisory lock: `~/.cache/orchestration/kayit-kilit/<first 16 hex digits of the sha256 of the record's real path>.lock`
+  (`fcntl.flock`; symlinks are resolved, so a link and its target take the same lock). The lock file is permanent and
+  lives in the cache, so no `.lock` file lands in the project repository. If the lock folder cannot be created or the
+  lock file cannot be opened, the exit code is 6 too. When `aile_elestirmen.py` cannot take the lock, the result is
+  already written to `--cikti`; the line is not written, it is printed to stderr, and the exit code is 6. The `--kayit`
+  append follows the file's line ending (CRLF for a CRLF file).
 - **Credentials (Codex):** every call uses a temporary `CODEX_HOME` containing only a 0600 copy of `auth.json`; user
   configuration, hooks and memory do not leak in. If Codex refreshes the token during the call, the new copy is
   written to the real file atomically; if the real file changed in another process meanwhile, it is not overwritten

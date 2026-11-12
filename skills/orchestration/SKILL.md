@@ -31,8 +31,9 @@ that family). No version numbers in rule text; versions live only in dated recor
 | Lower tier, for any other work **only if the user says so** [profile] | Sonnet | Luna |
 | Second opinion (audit), key points only | Astra · medium · read-only; methodology gates high; task-boundary K2 (task flagged `K2: yes`) Sol | Claude Opus · read-only |
 | Advisor | Fable (`advisor` tool) | none |
+| Fable review seat (branch-end final review; final read of a plan/spec before it goes to the user) | Fable · high (`fable-reviewer`, read-only) | none (equivalent: a fresh Sol `explorer`) |
 
-Resolution [measured 2026-10-08]: Opus → Opus 5.5 · Fable → Fable 5.1 · Sonnet → Sonnet 5.5 · Haiku → Haiku 5.5 ·
+Resolution [measured 2026-11-10]: Opus → Opus 5.5 · Fable → Fable 5.2 · Sonnet → Sonnet 5.5 · Haiku → Haiku 5.5 ·
 Astra → `gpt-6-astra` · Sol → `gpt-6.1-sol` · Luna → `gpt-6-luna`. Model IDs live in `scripts/modeller.json` and the
 agent files (Claude agent `.md`, Codex role `.toml`; see README); update them when a new model ships. If you have no access
 to one of these families, put your own models in those same files; the rules below keep working by role.
@@ -126,7 +127,7 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
   [measured n=1]) and the main session's review capacity; the technical limit is nesting depth, not count (default 3
   levels [doc]).
 - **Nesting:** a spawned agent follows the same type rules; **it may open helpers, it may not become a manager**. In
-  practice only `worker` can spawn; `explorer`, `researcher`, `scanner` have no agent tool.
+  practice only `worker` can spawn; `explorer`, `researcher`, `scanner`, `fable-reviewer` have no agent tool.
 - **Irreversible actions, two tiers.** A subagent does not push, delete remotes, delete untracked files, or write
   outside the workspace or to an external service; it returns to the main session. Outward-facing or hard-to-reverse
   actions also need the user's approval: the main session's approval does not replace the user's. Local edits need no
@@ -154,7 +155,9 @@ question twice is not a new view. The trigger is the kind of decision, not wheth
 - **Lower tier (Sonnet / Haiku / Luna) only if the user says so** [profile]; never drop down because "it is simple".
   The one exception is `scanner`: the drop happens by agent type, not by judgment at call time.
 - **`scanner` or `explorer`:** "where / called from / map / summarize this output" → `scanner`; anything with
-  judgment (spec compliance, is the code right, is the plan sound) → `explorer`. [measured n=2, blind scoring] in
+  judgment (spec compliance, is the code right, is the plan sound) → `explorer`. Judgment-free map work ("map of X",
+  inventory, decision-to-file mapping) also goes to `scanner`; if a "is it right / is it sound" question is added, it is
+  `explorer` (map work kept drifting to `explorer`). [measured n=2, blind scoring] in
   search Sonnet ≈ Opus; in document verification Sonnet made a factual error → `researcher` stays on Opus; review and
   implementation were not measured, so they stay on Opus. Haiku 5.5 was tried as a single-artifact scanner and made
   more false "none" claims than Sonnet in a blind comparison (9 runs each, 1-0); not adopted [measured 2026-10-08].
@@ -257,7 +260,8 @@ A same-family critic is fine, but an other-family critic must also be there; it 
 
 - **K2 required work types:** multi-task plan execution; multi-file change outside an engine; schema / state contract
   or gate change; outward-facing output. For a routine single-file fix K1 is enough.
-- **Placement:** default branch end. In SDD Final Review the `explorer` subagent does the last branch review; K2 runs
+- **Placement:** default branch end. In SDD Final Review the last branch review is done by `fable-reviewer` in Claude
+  Code and by a fresh `explorer` (Sol) in Codex; K2 runs
   in parallel on the same `review-package` file (`run_in_background`); the main session synthesizes both and asks the
   advisor before "done". Codex has no advisor; there the branch-end K2 (Claude Opus) result plus the main session's
   synthesis take its place, and Fable is not consulted manually from Codex. Task-boundary K2 opens only for a task
@@ -282,13 +286,20 @@ A same-family critic is fine, but an other-family critic must also be there; it 
   mode with Read/Grep/Glob only, file tools confined to the working dir. The wrapper builds the clean call, appends
   the "find the weakest point ... say 'none'" sentence if the brief lacks it, binds output to
   `scripts/elestirmen_sema.json`, and writes the Codex credential file back safely. A reply off the schema counts as
-  `undetermined` (exit 3); exit 77 means "refresh token was already used": do not retry, run `codex login`. The
+  `undetermined` (exit 3); a valid result whose record lock could not be taken is exit 6 (the line is not written, it is
+  printed to stderr; add it by hand); exit 77 means "refresh token was already used": do not retry, run `codex login`. The
   hand-built command (In Claude Code › Second opinion) is the fallback; details in `scripts/README.md`.
 - **Record:** after every cross-family call, one line in the project's STATE/ledger (inside SDD, the plan ledger). With
   `--kayit <file> --olay <short name>` (both required together) the wrapper writes it:
   `Cross-family <YYYY-MM-DD HH:MM> · <event> · <family> (<full id>) · <effort> · findings <n> (high <k>) · <output path>`
   (`undetermined (<reason>)` in place of the findings count when the reply is off-schema). After weighing, the main
-  session appends `· applied / parked (why)`. why: without a record its effect cannot be measured later.
+  session appends `· applied / parked (why)` to the same line:
+  `scripts/elestirmen_kayit_eki.py --kayit <file> --zaman "<YYYY-MM-DD HH:MM>" --olay <name> --karar applied|parked [--neden ...]`
+  (finds the line by time + event, opens no new line, never adds a second decision to a line that has one; the one
+  exception is parked → applied. Exit 1 not found, 4 several matches, 5 decision already there, 6 record lock not taken,
+  7 unreadable; the decision suffix and `--kayit` share the same lock; details in `scripts/README.md`). The record
+  file is the project ledger, not a scratchpad. why: without a record its effect cannot be measured later; when the
+  decision goes on a separate line, it cannot be counted by script.
 
 why branch end: in one multi-task plan execution the per-task reviews came back clean, while the branch-end read found
 8 real gaps (Astra) and 4 (explorer) [doc]. Astra default: it is the model measured in the audit role.
@@ -328,8 +339,11 @@ why [measured 2026-09-26, one multi-stage plan]: 5 audits in 20 hours, new-findi
 brief asked "ready?", every report said "no". What slowed things was making the audit a gate, not the audit (the first
 one caught a real bug).
 
-Reviewers are not stacked on one step, except K1 and K2 reading the same branch-end package in parallel. Who and when:
-Critic family table; advisor (Fable on Claude: direction, approach, stuck): "Advisor (Claude side)".
+Reviewers are not stacked on one step, with two exceptions: (1) K1 and K2 reading the same branch-end package in
+parallel (other family, other view); (2) the final version of a spec/plan that goes to the user: the advisor first asks
+only about the approach, then `fable-reviewer` reads the final text (a fresh `explorer` in Codex), then Astra on the
+final text (Second opinion › key point). Interim drafts and reads that do not go to the user stay with `explorer`.
+Who and when: Critic family table; advisor (Fable on Claude: direction, approach, stuck): "Advisor (Claude side)".
 
 ### With superpowers: "how" from there, "who" from this tree
 
@@ -347,9 +361,9 @@ re-auditing, update `tablo_surumu` and `tarih` in `hooks/superpowers_surum.json`
 |---|---|
 | implementer / task executor | `worker` |
 | task reviewer (single reviewer, spec + quality) and scoped re-review | `explorer` (read-only) |
-| brainstorming "builder check" (fresh reader) | `explorer`; writing-plans self-review opens no agent |
+| brainstorming "builder check" (fresh reader) | for the final read of a spec/plan that goes to the user, `fable-reviewer` in Claude Code (a fresh `explorer` in Codex), order as in Second opinion › no-stacking exception (2); interim drafts/reads that do not go to the user, `explorer`; writing-plans self-review opens no agent |
 | dispatching-parallel-agents agents | `worker` (`explorer` if read-only) |
-| final whole-branch review, SDD Final Review ("most capable model") | `explorer` subagent (main session does no active work); for a required work type or key point, K2 in parallel on the same `review-package` (Critic family); main session synthesizes both, advisor before "done" (Codex equivalent: Critic family › Placement) |
+| final whole-branch review, SDD Final Review ("most capable model") | `fable-reviewer` subagent in Claude Code (Fable · high, read-only; main session does no active work), a fresh `explorer` (Sol) in Codex; for a required work type or key point, K2 in parallel on the same `review-package` (Critic family); main session synthesizes both, advisor before "done" (Codex equivalent: Critic family › Placement) |
 | "Model Selection" (cheap / standard / most capable) | ignore; model comes from the agent file; do not write a `model` parameter |
 | a single orchestrator subagent running the whole SDD loop | do not use; the main session is the orchestrator (a subagent opening helpers for its own work is fine) |
 | SDD "Always specify the model explicitly" | do not write a `model` parameter; the agent file sets it (the gate rejects non-Opus) |
@@ -382,7 +396,7 @@ The main session consults **right before** these events (plan/architecture decis
 
 | Family | Event |
 |---|---|
-| Before the user sees it | approach choice at method/architecture level (not every design sub-question) · final spec/design · scientific/clinical options (SAP, threshold, exclusion) |
+| Before the user sees it | approach choice at method/architecture level (not every design sub-question) · final spec/design (approach only; `fable-reviewer` reads the final text) · scientific/clinical options (SAP, threshold, exclusion) |
 | Before execution starts | new component/write path/capability in an approved scope (once per change package) · plan commit → first worker · schema/state contract/gate logic merge (once per change) · a review finding forces a mechanism rewrite · a user process correction changes the method |
 | Before the irreversible | handoff note · "done" / merge to main · push/release |
 | When stuck | same error a second time · findings do not converge |
@@ -393,8 +407,10 @@ The main session consults **right before** these events (plan/architecture decis
   5 of 8 sessions the last consultation fell in the first 59% of the session; in one stage 6 hours passed with 1
   consultation while scope growth and a 22-task plan went unconsulted (inference: the old three triggers counted as
   "done" once met).
-- **Order with Astra:** for specs and scientific/clinical options, advisor first ("is this the right approach"), then
-  Astra ("what is wrong in the final text"); they do not repeat the same question.
+- **Order with Astra:** advisor first ("is this the right approach"), then the final text; they do not repeat the same
+  question. For the final version of a spec, plan or design that goes to the user the order is: advisor (approach
+  only) → `fable-reviewer` (final text) → then Astra on the final text (Second opinion › key point). For
+  scientific/clinical options: advisor → Astra.
 - **Record:** after each consultation, one line in the project's STATE/ledger:
   `Advisor <date time> · <event> · <advice summary> · applied / not applied (why)`. why: the advice text is encrypted
   in the log; without a record its effect cannot be measured.
@@ -421,9 +437,10 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
 ## In Claude Code
 
 - Subagents are **`explorer` / `worker` / `researcher`** (`model: opus`, `effort: medium`) and read-only
-  search/map/summary `scanner` (`model: sonnet`, `effort: medium`). User-level install (`~/.claude/agents/`): plain
+  search/map/summary `scanner` (`model: sonnet`, `effort: medium`) and read-only final read `fable-reviewer`
+  (`model: fable`, `effort: high`; below). User-level install (`~/.claude/agents/`): plain
   names (`explorer`); plugin install: `orchestration:explorer`, `orchestration:worker`, `orchestration:researcher`,
-  `orchestration:scanner`. Both forms mean the same agent; the bare names in this file cover both. Add your own
+  `orchestration:scanner`, `orchestration:fable-reviewer`. Both forms mean the same agent; the bare names in this file cover both. Add your own
   specialist agents (e.g. a literature screener) with the same settings; the gate allows any non-built-in type.
 - **Do not use the built-in `Explore` / `general-purpose`**: they carry no `effort` and inherit the main session's
   high. **Do not use `fork`**: it ignores the model setting and clones the main session.
@@ -434,9 +451,17 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
   switch, set in the environment the tool starts in; every denial message names it). If rejected,
   reopen with the right type; if the user asked for another type, tell them about the gate, never loosen it yourself.
 - Do not write a `model` parameter; the agent file sets the model (the gate rejects non-Opus). If Sonnet is needed,
-  use the `scanner` type, not a parameter. Fable is never opened as a subagent; it is only the advisor.
+  use the `scanner` type, not a parameter.
 - **Advisor:** the `advisor` tool (`~/.claude/settings.json` → `advisorModel: "fable"`); a `/advisor` change takes
   effect in the current chat only after `/clear` or `/compact`.
+- **Fable review seat:** `fable-reviewer` (`model: fable`, `effort: high`, read-only) is opened only for the branch-end
+  final review and the final read of a plan/spec before it goes to the user; every other job stays with the types
+  above.
+- **If the main session is Fable** (only when the user explicitly chose it): the advisor is Fable too and is not
+  independent; in a pilot, two advisor calls from a Fable main session got no reply (cause unclear, n=2). Before an
+  irreversible step (merge to main, push, handoff) the backup eye is Astra K2 or a fresh `explorer`. If the advisor
+  does not answer, do not wait; record it. Cost ~1.7× (per 100 turns, advisor excluded) [measured]. Missed in the
+  pilot: the plan's `K2: yes` flag and Who decides (do not set a scientific/clinical answer yourself).
 - **Effort inheritance:** never set the top-level `effortLevel` below high: a new Opus/Fable without a `modelSettings`
   entry silently drops to that value. On a new release measure effort from inside the process
   (`printenv CLAUDE_EFFORT`).

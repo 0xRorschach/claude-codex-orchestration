@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Subagent type gate: PreToolUse (Agent/Task).
 
-Model tree: subagents run as Opus at medium effort; the agent file's `effort:` field carries that. The built-in
-general-purpose types carry no effort and inherit the main session's high effort [measured 2026-09-25: Explore ->
+Model tree: a subagent's model and effort come from its agent file (`model:` / `effort:`): explorer/worker/researcher
+Opus · medium, scanner Sonnet · medium, fable-reviewer Fable · high. Another model is chosen by agent type, not by the
+call's `model` parameter. The built-in general-purpose types carry no effort and inherit the main session's high effort [measured 2026-09-25: Explore ->
 high, explorer -> medium]. Superpowers templates write `general-purpose`, so the rule cannot be kept by text alone;
 this gate enforces it.
 
@@ -30,10 +31,11 @@ from pathlib import Path
 # setting. claude-code-guide, statusline-setup and plugin agents are narrow-purpose and rare; deliberately allowed.
 YASAK = {"general-purpose", "explore", "plan", "claude", "fork", ""}
 
-# scanner (Sonnet, medium effort): its model comes from the agent file, so it passes this gate; dropping to Sonnet
-# through the `model` parameter stays closed.
+# scanner (Sonnet, medium effort) and fable-reviewer (Fable, high effort): their model comes from the agent file, so
+# they pass this gate; choosing another model through the `model` parameter stays closed.
 ONERI = ("Use instead: search/map/raw-output summary -> `scanner`, review/judgement-heavy exploration -> `explorer`, "
-         "implementation+tests -> `worker`, "
+         "implementation+tests -> `worker`, branch-end final review or the final read of a plan/spec that goes to "
+         "the user -> `fable-reviewer`, "
          "docs/API verification -> `researcher`. "
          "If the user explicitly asked for another type for this job, tell them about this gate.")
 # Last sentence of every denial: how to turn the gate off (same switch form as the other hooks).
@@ -107,10 +109,11 @@ def main():
     model = ((veri.get("tool_input") or {}).get("model") or "").strip().lower()
     if model and not opus_mu(model):
         logla(veri, f"model {model} is not opus")
-        karar(f"`model: {model}` is closed: a subagent's model comes from its agent file (Opus, medium effort); "
-              "the `model` parameter in the call overrides it. Remove the parameter. For read-only "
-              "search/map/summary work that needs Sonnet, use the `scanner` type. Other models for other work "
-              f"only if the user says so; if they did, tell them about this gate. Rule book: {kural_kitabi()}. "
+        karar(f"`model: {model}` is closed: a subagent's model comes from its agent file; the `model` parameter "
+              "in the call overrides it. Remove the parameter. Another model is chosen by agent type, not by "
+              "parameter: search/map/summary -> `scanner` (Sonnet · medium), branch-end final review or the final "
+              "read of a plan/spec that goes to the user -> `fable-reviewer` (Fable · high). Non-Opus models for "
+              f"other work only if the user says so; if they did, tell them about this gate. Rule book: {kural_kitabi()}. "
               f"{KAPATMA}")
 
     tip = ((veri.get("tool_input") or {}).get("subagent_type") or "").strip()
@@ -120,7 +123,7 @@ def main():
         gorunen = tip or "(empty -> general-purpose)"
         logla(veri, f"forbidden type {gorunen}")
         karar(f"The `{gorunen}` type is closed: it inherits the main session's effort or ignores the model "
-              f"setting (subagents must run as Opus at medium effort). {ONERI} Rule book: {kural_kitabi()}. "
+              f"setting (a subagent's model and effort must come from its agent file). {ONERI} Rule book: {kural_kitabi()}. "
               f"{KAPATMA}")
     sys.exit(0)
 

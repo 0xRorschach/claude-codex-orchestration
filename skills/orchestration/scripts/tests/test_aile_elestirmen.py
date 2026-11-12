@@ -4,8 +4,9 @@ import json
 import os
 import re
 from pathlib import Path
+from unittest import mock
 
-from ortak import BETIKLER, SahteCodexTesti
+from ortak import BETIKLER, SahteCodexTesti, beklenen_kilit
 
 import aile_elestirmen
 
@@ -166,6 +167,41 @@ class UctanUcaCodex(SahteCodexTesti):
         self.assertEqual(kod, aile_elestirmen.KOD_GECERSIZ_CIKTI)
         self.assertEqual(cikti.read_text(encoding="utf-8"), "plain text")
         self.assertIn("undetermined", kayit.read_text(encoding="utf-8"))
+
+    def test_kayit_kilidi_tutuluyorsa_ayri_kod_kayit_degismez(self):
+        import fcntl
+        import elestirmen_kayit_eki
+        self.mod("normal", SAHTE_SON_MESAJ=json.dumps(GECERLI))
+        kayit = self.kok / "k.md"
+        kayit.write_text("# STATE\n", encoding="utf-8")
+        beklenen_kilit(kayit).parent.mkdir(parents=True, exist_ok=True)
+        kilit = os.open(beklenen_kilit(kayit), os.O_RDWR | os.O_CREAT, 0o600)
+        self.addCleanup(os.close, kilit)
+        fcntl.flock(kilit, fcntl.LOCK_EX)
+        hata = io.StringIO()
+        with mock.patch.object(elestirmen_kayit_eki, "KILIT_BEKLEME_SN", 0.3), contextlib.redirect_stderr(hata):
+            kod, cikti, _ = self.kos("--kayit", str(kayit), "--olay", "x")
+        self.assertEqual(kod, aile_elestirmen.KOD_KAYIT_KILIDI)
+        self.assertEqual(kayit.read_text(encoding="utf-8"), "# STATE\n")
+        self.assertEqual(json.loads(cikti.read_text(encoding="utf-8")), GECERLI)
+        self.assertIn("Cross-family", hata.getvalue())
+
+    def test_kayit_kilit_klasoru_yazilamazsa_6_traceback_yok(self):
+        import elestirmen_kayit_eki  # noqa: F401
+        self.mod("normal", SAHTE_SON_MESAJ=json.dumps(GECERLI))
+        kayit = self.kok / "k.md"
+        kayit.write_text("# STATE\n", encoding="utf-8")
+        klasor = beklenen_kilit(kayit).parent
+        klasor.mkdir(parents=True)
+        os.chmod(klasor, 0o500)
+        self.addCleanup(os.chmod, klasor, 0o700)
+        hata = io.StringIO()
+        with contextlib.redirect_stderr(hata):
+            kod, cikti, _ = self.kos("--kayit", str(kayit), "--olay", "x")
+        self.assertEqual(kod, aile_elestirmen.KOD_KAYIT_KILIDI)
+        self.assertEqual(kayit.read_text(encoding="utf-8"), "# STATE\n")
+        self.assertEqual(json.loads(cikti.read_text(encoding="utf-8")), GECERLI)
+        self.assertNotIn("Traceback", hata.getvalue())
 
     def test_login_hatasi_kodu_gecer(self):
         self.mod("refresh-hata")

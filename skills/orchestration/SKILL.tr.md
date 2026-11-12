@@ -28,8 +28,9 @@ Kural metninde sürüm numarası yok; sürümler yalnız tarihli kayıtlarda ve 
 | Alt kademe, başka her iş için **yalnız kullanıcı söylerse** [profil] | Sonnet | Luna |
 | İkinci görüş (audit), yalnız kilit noktalar | Astra · medium · salt-okur; metodoloji kapılarında high; görev sınırı K2 (`K2: yes` işaretli görev) Sol | Claude Opus · salt-okur |
 | Danışman | Fable (`advisor` aracı) | yok |
+| Fable inceleme koltuğu (dal sonu son inceleme; kullanıcıya gidecek plan/spec'in son okuması) | Fable · high (`fable-reviewer`, salt-okur) | yok (karşılığı: taze Sol `explorer`) |
 
-Çözümleme [ölçüm 2026-10-08]: Opus → Opus 5.5 · Fable → Fable 5.1 · Sonnet → Sonnet 5.5 · Haiku → Haiku 5.5 ·
+Çözümleme [ölçüm 2026-11-10]: Opus → Opus 5.5 · Fable → Fable 5.2 · Sonnet → Sonnet 5.5 · Haiku → Haiku 5.5 ·
 Astra → `gpt-6-astra` · Sol → `gpt-6.1-sol` · Luna → `gpt-6-luna`. Model kimlikleri `scripts/modeller.json`'da ve
 ajan dosyalarında durur (Claude ajanı `.md`, Codex rolü `.toml`; bkz. README); yeni model çıkınca bunları güncelle. Bu
 ailelerden birine erişimin yoksa kendi modellerini aynı dosyalara yaz; aşağıdaki kurallar rol üzerinden çalışmaya devam
@@ -121,7 +122,7 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
   kullanıcıya yaz (iç içe açılanlar dahil). neden: maliyet (boş bir alt ajan bile ~26k token [ölçüm n=1]) ve ana
   oturumun denetim kapasitesi; teknik sınır sayı değil, iç içe derinliktir (varsayılan 3 düzey [doküman]).
 - **İç içe:** açılan ajan aynı tip kurallarına uyar; **yardımcı açabilir, yönetici olamaz**. Pratikte yalnız `worker`
-  ajan açabilir; `explorer`, `researcher`, `scanner`'ın ajan aracı yoktur.
+  ajan açabilir; `explorer`, `researcher`, `scanner`, `fable-reviewer`'ın ajan aracı yoktur.
 - **Geri alınamaz eylem, iki kademe.** Alt ajan push etmez, uzak dal silmez, izlenmeyen dosya silmez, çalışma alanı
   dışına ya da dış bir servise yazmaz; ana oturuma döner. Dışa dönük ya da geri dönüşü zor eylem ayrıca kullanıcının
   onayını ister: ana oturumun onayı kullanıcınınkinin yerine geçmez. Yerel düzenleme durak istemez. Worker görev işini
@@ -147,7 +148,9 @@ değildir. Tetik kararın türüdür, orkestrasyonun açık olup olmadığı de�
 - **Alt kademe (Sonnet / Haiku / Luna) yalnız kullanıcı söylerse** [profil]; "basit" diye asla aşağı inme. Tek istisna
   `scanner`'dır: iniş çağrı anındaki yargıyla değil, ajan tipiyle olur.
 - **`scanner` mı `explorer` mı:** "nerede / nereden çağrılıyor / yapı dökümü / bu çıktıyı özetle" → `scanner`; yargı içeren
-  her şey (spec'e uyum, kod doğru mu, plan sağlam mı) → `explorer`. [ölçüm n=2, kör puanlama] aramada Sonnet ≈ Opus;
+  her şey (spec'e uyum, kod doğru mu, plan sağlam mı) → `explorer`. "X'in yapı dökümü", envanter, karar-dosya eşlemesi gibi
+  yargısız döküm işleri de `scanner`'a gider; "doğru mu / sağlam mı" sorusu eklenirse `explorer` (bu işler
+  `explorer`'a kayıp duruyordu). [ölçüm n=2, kör puanlama] aramada Sonnet ≈ Opus;
   belge doğrulamada Sonnet olgu hatası yaptı → `researcher` Opus'ta kalır; inceleme ve uygulama ölçülmedi, o yüzden
   Opus'ta kalır. Haiku 5.5 tek dosyalık tarayıcı olarak denendi ve kör karşılaştırmada Sonnet'ten fazla yanlış "yok"
   iddiası üretti (her biri 9 koşu, 1-0); benimsenmedi [ölçüm 2026-10-08].
@@ -250,7 +253,8 @@ verir.
 
 - **K2 zorunlu iş türleri:** çok görevli plan yürütmesi; motor dışında çok dosyalı değişiklik; şema / durum sözleşmesi
   ya da kapı değişikliği; dışa dönük çıktı. Rutin tek dosyalık düzeltmede K1 yeter.
-- **Yerleşim:** varsayılan dal sonu. SDD Final Review'da son dal incelemesini `explorer` alt ajanı yapar; K2 aynı
+- **Yerleşim:** varsayılan dal sonu. SDD Final Review'da son dal incelemesini Claude Code'da `fable-reviewer`,
+  Codex'te taze `explorer` (Sol) yapar; K2 aynı
   `review-package` dosyası üzerinde paralel koşar (`run_in_background`); ana oturum ikisini sentezler ve "bitti"
   demeden önce danışmana sorar. Codex'te danışman yoktur; orada dal sonu K2 (Claude Opus) sonucu ve ana oturumun
   sentezi onun yerini tutar ve Codex'ten Fable'a elle danışılmaz. Görev sınırı K2 yalnız planın Global
@@ -275,14 +279,20 @@ verir.
   Claude'dan `--model astra|sol` (varsayılan astra). Claude yönü yalnız Read/Grep/Glob ile `--restricted` modunda koşar,
   dosya araçları çalışma dizinine kapalıdır. Sarmalayıcı temiz çağrıyı kurar, brief'te yoksa "find the weakest point
   ... say 'none'" cümlesini ekler, çıktıyı `scripts/elestirmen_sema.json`'a bağlar ve Codex kimlik bilgisi dosyasını
-  güvenle geri yazar. Şemaya uymayan yanıt `undetermined` sayılır (çıkış 3); çıkış 77 "refresh token was already
+  güvenle geri yazar. Şemaya uymayan yanıt `undetermined` sayılır (çıkış 3); sonuç geçerli ama kayıt kilidi alınamadıysa
+  çıkış 6 olur (satır yazılmaz, stderr'e basılır; elle eklenir); çıkış 77 "refresh token was already
   used" demektir: yeniden deneme, `codex login` koş. Elle kurulan komut (Claude Code'da › İkinci görüş) yedek yoldur;
   ayrıntı `scripts/README.md`'de.
 - **Kayıt:** her aileler arası çağrıdan sonra projenin STATE'ine/defterine tek satır (SDD içinde plan defterine).
   `--kayit <file> --olay <short name>` ile (ikisi birlikte zorunlu) sarmalayıcı satırı kendisi yazar:
   `Cross-family <YYYY-MM-DD HH:MM> · <event> · <family> (<full id>) · <effort> · findings <n> (high <k>) · <output path>`
   (yanıt şema dışıysa bulgu sayısı yerine `undetermined (<reason>)`). Tarttıktan sonra ana oturum
-  `· applied / parked (why)` ekler. neden: kayıt olmadan etkisi sonradan ölçülemez.
+  aynı satırın sonuna `· applied / parked (why)` ekler:
+  `scripts/elestirmen_kayit_eki.py --kayit <file> --zaman "<YYYY-MM-DD HH:MM>" --olay <name> --karar applied|parked [--neden ...]`
+  (satırı zaman + olayla bulur, yeni satır açmaz, kararı olan satıra ikinci karar koymaz; tek istisna parked → applied.
+  Çıkış 1 bulunamadı, 4 birden çok eşleşme, 5 karar zaten var, 6 kayıt kilidi alınamadı, 7 okunamadı; karar eki ve
+  `--kayit` aynı kilidi kullanır; ayrıntı `scripts/README.md`'de). Kayıt dosyası proje defteridir, scratchpad değil.
+  neden: kayıt olmadan etkisi sonradan ölçülemez; karar ayrı satıra yazılınca otomatik sayılamaz.
 
 neden dal sonu: çok görevli bir plan yürütmesinde görev başı incelemeler temiz döndü, dal sonu okuması ise 8 (Astra) ve
 4 (explorer) gerçek açık buldu [doküman]. Astra'nın varsayılan olması, audit rolünde ölçülen modelin o olmasındandır.
@@ -323,7 +333,10 @@ neden [ölçüm 2026-09-26, çok aşamalı tek plan]: 20 saatte 5 audit, yeni bu
 "hazır mı?" diye sordu, her rapor "hayır" dedi. İşi yavaşlatan audit'in kendisi değil, audit'i kapı yapmaktı (ilki
 gerçek bir hata yakaladı).
 
-İnceleyiciler tek adıma üst üste konmaz; istisna, dal sonu paketini paralel okuyan K1 ve K2'dir. Kim ve ne zaman:
+İnceleyiciler tek adıma üst üste konmaz; iki istisna var: (1) dal sonu paketini paralel okuyan K1 ve K2 (başka aile,
+başka bakış); (2) kullanıcıya gidecek spec/planın son halinde önce danışman yalnız yaklaşımı sorar, sonra son metni
+`fable-reviewer` okur (Codex'te taze `explorer`), ardından son metne Astra (İkinci görüş › kilit nokta). Kullanıcıya
+gitmeyen ara taslak ve okumalar `explorer`'da kalır. Kim ve ne zaman:
 Eleştirmen ailesi tablosu; danışman (Claude'da Fable: yön, yaklaşım, takılma): "Danışman (Claude tarafı)".
 
 ### Superpowers ile: "nasıl" oradan, "kim" bu ağaçtan
@@ -342,9 +355,9 @@ Claude ve Codex) kurulu sürüm farklıysa "re-audit the mapping table" notu ekl
 |---|---|
 | implementer / task executor | `worker` |
 | task reviewer (tek inceleyici, spec + kalite) ve kapsamı daraltılmış yeniden inceleme | `explorer` (salt-okur) |
-| brainstorming "builder check" (taze okur) | `explorer`; writing-plans öz incelemesi ajan açmaz |
+| brainstorming "builder check" (taze okur) | kullanıcıya gidecek spec/planın son okumasında Claude Code'da `fable-reviewer` (Codex'te taze `explorer`), sıra İkinci görüş › üst üste koymama istisnası (2); kullanıcıya gitmeyen ara taslak/okuma `explorer`; writing-plans öz incelemesi ajan açmaz |
 | dispatching-parallel-agents ajanları | `worker` (salt-okursa `explorer`) |
-| son bütün dal incelemesi, SDD Final Review ("most capable model") | `explorer` alt ajanı (ana oturum aktif iş yapmaz); zorunlu iş türünde ya da kilit noktada aynı `review-package` üzerinde paralel K2 (Eleştirmen ailesi); ana oturum ikisini sentezler, "bitti"den önce danışman (Codex karşılığı: Eleştirmen ailesi › Yerleşim) |
+| son bütün dal incelemesi, SDD Final Review ("most capable model") | Claude Code'da `fable-reviewer` alt ajanı (Fable · high, salt-okur; ana oturum aktif iş yapmaz), Codex'te taze `explorer` (Sol); zorunlu iş türünde ya da kilit noktada aynı `review-package` üzerinde paralel K2 (Eleştirmen ailesi); ana oturum ikisini sentezler, "bitti"den önce danışman (Codex karşılığı: Eleştirmen ailesi › Yerleşim) |
 | "Model Selection" (cheap / standard / most capable) | yok say; model ajan dosyasından gelir; `model` parametresi yazma |
 | bütün SDD döngüsünü yürüten tek orkestratör alt ajanı | kullanma; orkestratör ana oturumdur (kendi işi için yardımcı açan alt ajan sorun değil) |
 | SDD "Always specify the model explicitly" | `model` parametresi yazma; ajan dosyası belirler (kapı Opus dışını reddeder) |
@@ -376,7 +389,7 @@ Ana oturum şu olaylardan **hemen önce** danışır (karşılığını plan/mim
 
 | Aile | Olay |
 |---|---|
-| Kullanıcı görmeden önce | yöntem/mimari düzeyinde yaklaşım seçimi (her tasarım alt sorusu değil) · son spec/tasarım · bilimsel/klinik seçenekler (SAP, eşik, dışlama) |
+| Kullanıcı görmeden önce | yöntem/mimari düzeyinde yaklaşım seçimi (her tasarım alt sorusu değil) · son spec/tasarım (yalnız yaklaşım; son metni `fable-reviewer` okur) · bilimsel/klinik seçenekler (SAP, eşik, dışlama) |
 | Yürütme başlamadan önce | onaylı kapsamda yeni bileşen/yazma yolu/yetenek (değişiklik paketi başına bir kez) · plan commit → ilk worker · şema/durum sözleşmesi/kapı mantığı birleştirmesi (değişiklik başına bir kez) · bir inceleme bulgusu mekanizmanın yeniden yazılmasını zorlar · kullanıcının süreç düzeltmesi yöntemi değiştirir |
 | Geri dönülmezden önce | devir notu · "bitti" / main'e birleştirme · push/sürüm |
 | Takılınca | aynı hata ikinci kez · bulgular yakınsamıyor |
@@ -386,8 +399,9 @@ Ana oturum şu olaylardan **hemen önce** danışır (karşılığını plan/mim
   değişiklik sohbet içinde verilse de "büyük plan" sayılır. neden [ölçüm 2026-10-11, oturum logları]: 8 oturumun 5'inde
   son danışma oturumun ilk %59'luk kısmında kaldı; bir aşamada 6 saat 1 danışmayla geçti, kapsam büyümesi ve 22 görevlik plan
   danışmasız kaldı (çıkarım: eski üç tetik bir kez karşılanınca "yapıldı" sayıldı).
-- **Astra ile sıra:** spec ve bilimsel/klinik seçeneklerde önce danışman ("doğru yaklaşım bu mu"), sonra Astra ("son
-  metinde ne yanlış"); aynı soruyu tekrarlamazlar.
+- **Astra ile sıra:** önce danışman ("doğru yaklaşım bu mu"), sonra son metin; aynı soruyu tekrarlamazlar.
+  Kullanıcıya gidecek spec, plan ya da tasarımın son halinde önce danışman (yalnız yaklaşım), sonra `fable-reviewer`
+  (son metin), en son Astra son metni okur (İkinci görüş › kilit nokta). Bilimsel/klinik seçenekte danışman → Astra.
 - **Kayıt:** her danışmadan sonra projenin STATE'ine/defterine tek satır:
   `Advisor <date time> · <event> · <advice summary> · applied / not applied (why)`. neden: tavsiye metni logda
   şifrelidir; kayıt olmadan etkisi ölçülemez.
@@ -414,9 +428,10 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
 ## Claude Code'da
 
 - Alt ajanlar **`explorer` / `worker` / `researcher`** (`model: opus`, `effort: medium`) ve salt-okur
-  arama/yapı dökümü/özet için `scanner`'dır (`model: sonnet`, `effort: medium`). Kullanıcı düzeyi kurulum
+  arama/yapı dökümü/özet için `scanner`'dır (`model: sonnet`, `effort: medium`); salt-okur son okuma
+  `fable-reviewer`'dır (`model: fable`, `effort: high`; aşağıda). Kullanıcı düzeyi kurulum
   (`~/.claude/agents/`): düz adlar (`explorer`); eklenti kurulumu: `orchestration:explorer`, `orchestration:worker`,
-  `orchestration:researcher`, `orchestration:scanner`. İki biçim de aynı ajandır; bu dosyadaki çıplak adlar ikisini de
+  `orchestration:researcher`, `orchestration:scanner`, `orchestration:fable-reviewer`. İki biçim de aynı ajandır; bu dosyadaki çıplak adlar ikisini de
   kapsar. Kendi uzman ajanlarını (ör. bir literatür tarayıcısı) aynı ayarlarla ekle; kapı yerleşik olmayan her tipe
   izin verir.
 - **Yerleşik `Explore` / `general-purpose` kullanma**: `effort` taşımazlar ve ana oturumun high düzeyini miras alırlar.
@@ -428,9 +443,16 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
   (kullanıcının anahtarıdır, aracın başladığı ortamda ayarlanır; her ret mesajı bunu söyler). Reddederse doğru tiple
   yeniden aç; kullanıcı başka bir tip istediyse ona kapıyı anlat, kapıyı asla kendin gevşetme.
 - `model` parametresi yazma; modeli ajan dosyası belirler (kapı Opus dışını reddeder). Sonnet gerekirse parametre değil
-  `scanner` tipini kullan. Fable asla alt ajan olarak açılmaz; yalnız danışmandır.
+  `scanner` tipini kullan.
 - **Danışman:** `advisor` aracı (`~/.claude/settings.json` → `advisorModel: "fable"`); `/advisor` değişikliği geçerli
   sohbette ancak `/clear` ya da `/compact` sonrasında etkili olur.
+- **Fable inceleme koltuğu:** `fable-reviewer` (`model: fable`, `effort: high`, salt-okur) yalnız dal sonu son
+  incelemesi ve kullanıcıya gitmeden önce plan/spec'in son okuması için açılır; başka her iş yukarıdaki tiplerde kalır.
+- **Ana oturum Fable ise** (yalnız kullanıcı açıkça seçtiyse): danışman da Fable olur ve bağımsız değildir; bir
+  pilotta Fable ana oturumdan yapılan iki danışman çağrısı yanıtsız kaldı (neden belirsiz, n=2). Geri dönülmez adımda
+  (main'e birleştirme, push, devir) yedek göz Astra K2 ya da taze `explorer`'dır. Danışman yanıt vermezse bekleme,
+  kayda yaz. Maliyet ~1,7 kat (100 tur başına, danışman hariç) [ölçüm]. Pilotta plandaki `K2: yes` bayrağı ve
+  Karar kimde kuralı (bilimsel/klinik cevabı kendin belirleme) gözden kaçtı.
 - **Effort mirası:** üst düzey `effortLevel`'ı asla high'ın altına ayarlama: `modelSettings` girdisi olmayan yeni bir
   Opus/Fable sessizce o değere düşer. Yeni sürümde effort'u sürecin içinden ölç (`printenv CLAUDE_EFFORT`).
 - **İkinci görüş, Astra audit'i.** Yalnız script kullanılamıyorsa ve aynı anda başka bir Codex çağrısı koşmuyorsa

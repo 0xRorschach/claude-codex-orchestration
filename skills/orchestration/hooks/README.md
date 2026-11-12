@@ -122,10 +122,11 @@ Enforces the agent type and model tree on every `Agent`/`Task` call, including c
 
 - A `model` parameter is denied unless it is `opus` or a full Opus id starting with `claude-opus-` (for example
   `claude-opus-4-1`; case-insensitive): the subagent's model must come from its agent file. `claude-opus` without a
-  version, `sonnet`, `haiku` and any other value are denied.
+  version, `sonnet`, `haiku` and any other value are denied. Another model is chosen by agent type (`scanner` for
+  Sonnet, `fable-reviewer` for Fable), not by this parameter.
 - The general-purpose types `general-purpose`, `Explore`, `Plan`, `claude`, `fork` and an empty type (which means
   `general-purpose`) are denied (case-insensitive): they inherit the main session's effort or ignore the model
-  setting. The denial message suggests `scanner`, `explorer`, `worker` or `researcher`.
+  setting. The denial message suggests `scanner`, `explorer`, `worker`, `fable-reviewer` or `researcher`.
 - A plugin-qualified type `<plugin>:<agent>` (for example `orchestration:explorer` when this repo is installed as
   a Claude Code plugin) is checked by its last part: `orchestration:explorer` passes, `x:general-purpose` is denied.
 - Every other type passes, including plugin agents and narrow built-ins such as `claude-code-guide`.

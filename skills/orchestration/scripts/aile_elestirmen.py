@@ -10,8 +10,8 @@ Usage:
 The working folder (default: the current cwd) is passed explicitly in both directions: `-C` for Codex, process cwd for
 Claude. The critic reads only this folder (Codex read-only sandbox, Claude --restricted).
 In the record and summary lines the model appears as `family (full id)`; just the family if the full id is unknown.
-Exit: 0 valid result · 3 output does not match the schema (undetermined) · 77 codex login required · other: the
-tool's own code.
+Exit: 0 valid result · 3 output does not match the schema (undetermined) · 6 valid result but the record lock was not
+taken (line not written, printed to stderr) · 77 codex login required · other: the tool's own code.
 """
 from __future__ import annotations
 
@@ -25,11 +25,13 @@ from typing import Mapping
 
 import claude_cagri
 import codex_cagri
+import elestirmen_kayit_eki
 
 SEMA_YOLU = Path(__file__).resolve().parent / "elestirmen_sema.json"
 EK_GOREV = "Task: find the weakest point. If there is no significant weakness, say 'none'."
 SALT_OKUR_CUMLESI = "You are read-only; do not modify files."
 KOD_GECERSIZ_CIKTI = 3
+KOD_KAYIT_KILIDI = 6
 ONEMLER = ("yuksek", "orta", "dusuk")
 
 # Session markers [MEASURED 2026-11-07]: a Claude Code session's shell has CLAUDECODE=1 (`env`). In a Codex
@@ -155,18 +157,20 @@ def ana(argv: list[str] | None = None) -> int:
     cikti.write_text(json.dumps(veri, ensure_ascii=False, indent=2) + "\n" if veri is not None else son,
                      encoding="utf-8")
 
+    kayit_kodu = 0
     if a.kayit:
         satir = kayit_satiri(datetime.datetime.now(), a.olay, model_kimligi, a.effort, veri, str(cikti), neden)
-        kayit = Path(a.kayit)
-        onceki = kayit.read_text(encoding="utf-8") if kayit.exists() else ""
-        with open(kayit, "a", encoding="utf-8") as f:
-            f.write(("" if not onceki or onceki.endswith("\n") else "\n") + satir + "\n")
+        try:  # same lock as the decision-suffix script: a concurrent read-modify-write must not drop this line
+            elestirmen_kayit_eki.kayda_ekle(a.kayit, satir)
+        except elestirmen_kayit_eki.KilitAlinamadi as e:
+            print(f"record lock not taken ({e}); record not written, add the line by hand: {satir}", file=sys.stderr)
+            kayit_kodu = KOD_KAYIT_KILIDI
 
     if veri is not None:
         yuksek = sum(1 for b in veri["bulgular"] if b["onem"] == "yuksek")
         print(f"Cross-family ({aile}, {model_kimligi}, {a.effort}): findings {len(veri['bulgular'])} (high {yuksek}), "
               f"weakness {'yes' if veri['zayiflik_var'] else 'no'}. Output: {cikti} · event stream: {akis}")
-        return 0
+        return kayit_kodu
     print(f"Cross-family ({aile}, {model_kimligi}, {a.effort}): undetermined, {neden}. "
           f"Raw output: {cikti} · event stream: {akis}", file=sys.stderr)
     if kod != 0 and son:

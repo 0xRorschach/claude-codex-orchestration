@@ -63,7 +63,8 @@ class AgentTipKapisi(TempOrtam):
                 self.assertIn("is closed", c["permissionDecisionReason"])
 
     def test_eklenti_onekli_tip_son_parcaya_gore(self):
-        for tip in ("orchestration:explorer", "orchestration:scanner", "orchestration:worker"):
+        for tip in ("orchestration:explorer", "orchestration:scanner", "orchestration:worker",
+                    "orchestration:fable-reviewer"):
             with self.subTest(tip=tip):
                 self.assertEqual(self.k(agent_girdisi(tip)).stdout, "")
         for tip in ("x:general-purpose", "orchestration:Explore", "x:fork"):
@@ -85,7 +86,7 @@ class AgentTipKapisi(TempOrtam):
                 self.assertIn("`model: %s`" % model.strip().lower(), c["permissionDecisionReason"])
 
     def test_izinli_tipler_gecer(self):
-        for tip in ("explorer", "worker", "researcher", "scanner"):
+        for tip in ("explorer", "worker", "researcher", "scanner", "fable-reviewer"):
             with self.subTest(tip=tip):
                 self.assertEqual(self.k(agent_girdisi(tip)).stdout, "")
 
