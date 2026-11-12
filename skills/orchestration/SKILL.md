@@ -286,8 +286,9 @@ A same-family critic is fine, but an other-family critic must also be there; it 
   mode with Read/Grep/Glob only, file tools confined to the working dir. The wrapper builds the clean call, appends
   the "find the weakest point ... say 'none'" sentence if the brief lacks it, binds output to
   `scripts/elestirmen_sema.json`, and writes the Codex credential file back safely. A reply off the schema counts as
-  `undetermined` (exit 3); a valid result whose record lock could not be taken is exit 6 (the line is not written, it is
-  printed to stderr; add it by hand); exit 77 means "refresh token was already used": do not retry, run `codex login`. The
+  `undetermined` (exit 3); a valid result whose record lock could not be taken is exit 6, and one whose line could not
+  be written for another file system reason is exit 7 (in both the line is not written, it is printed to stderr; add it
+  by hand); an `--olay` with the ` · ` separator or a line break stops the call before the critic runs (exit 2); exit 77 means "refresh token was already used": do not retry, run `codex login`. The
   hand-built command (In Claude Code › Second opinion) is the fallback; details in `scripts/README.md`.
 - **Record:** after every cross-family call, one line in the project's STATE/ledger (inside SDD, the plan ledger). With
   `--kayit <file> --olay <short name>` (both required together) the wrapper writes it:
@@ -296,8 +297,9 @@ A same-family critic is fine, but an other-family critic must also be there; it 
   session appends `· applied / parked (why)` to the same line:
   `scripts/elestirmen_kayit_eki.py --kayit <file> --zaman "<YYYY-MM-DD HH:MM>" --olay <name> --karar applied|parked [--neden ...]`
   (finds the line by time + event, opens no new line, never adds a second decision to a line that has one; the one
-  exception is parked → applied. Exit 1 not found, 4 several matches, 5 decision already there, 6 record lock not taken,
-  7 unreadable; the decision suffix and `--kayit` share the same lock; details in `scripts/README.md`). The record
+  exception is parked → applied. Exit 1 not found, 2 usage error (`--olay` with ` · ` or a line break,
+  `--neden` with a line break), 4 several matches, 5 decision already there, 6 record lock not taken, 7 unreadable or
+  not written; the decision suffix and `--kayit` share the same lock; details in `scripts/README.md`). The record
   file is the project ledger, not a scratchpad. why: without a record its effect cannot be measured later; when the
   decision goes on a separate line, it cannot be counted by script.
 

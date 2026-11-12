@@ -280,7 +280,9 @@ verir.
   dosya araçları çalışma dizinine kapalıdır. Sarmalayıcı temiz çağrıyı kurar, brief'te yoksa "find the weakest point
   ... say 'none'" cümlesini ekler, çıktıyı `scripts/elestirmen_sema.json`'a bağlar ve Codex kimlik bilgisi dosyasını
   güvenle geri yazar. Şemaya uymayan yanıt `undetermined` sayılır (çıkış 3); sonuç geçerli ama kayıt kilidi alınamadıysa
-  çıkış 6 olur (satır yazılmaz, stderr'e basılır; elle eklenir); çıkış 77 "refresh token was already
+  çıkış 6, satır başka bir dosya sistemi hatasıyla yazılamadıysa çıkış 7 olur (ikisinde de satır yazılmaz, stderr'e
+  basılır; elle eklenir); `--olay` içinde ` · ` ayırıcısı ya da satır sonu varsa çağrı eleştirmen koşmadan durur
+  (çıkış 2); çıkış 77 "refresh token was already
   used" demektir: yeniden deneme, `codex login` koş. Elle kurulan komut (Claude Code'da › İkinci görüş) yedek yoldur;
   ayrıntı `scripts/README.md`'de.
 - **Kayıt:** her aileler arası çağrıdan sonra projenin STATE'ine/defterine tek satır (SDD içinde plan defterine).
@@ -290,7 +292,8 @@ verir.
   aynı satırın sonuna `· applied / parked (why)` ekler:
   `scripts/elestirmen_kayit_eki.py --kayit <file> --zaman "<YYYY-MM-DD HH:MM>" --olay <name> --karar applied|parked [--neden ...]`
   (satırı zaman + olayla bulur, yeni satır açmaz, kararı olan satıra ikinci karar koymaz; tek istisna parked → applied.
-  Çıkış 1 bulunamadı, 4 birden çok eşleşme, 5 karar zaten var, 6 kayıt kilidi alınamadı, 7 okunamadı; karar eki ve
+  Çıkış 1 bulunamadı, 2 kullanım hatası (`--olay` içinde ` · ` ya da satır sonu, `--neden` içinde satır sonu),
+  4 birden çok eşleşme, 5 karar zaten var, 6 kayıt kilidi alınamadı, 7 okunamadı ya da yazılamadı; karar eki ve
   `--kayit` aynı kilidi kullanır; ayrıntı `scripts/README.md`'de). Kayıt dosyası proje defteridir, scratchpad değil.
   neden: kayıt olmadan etkisi sonradan ölçülemez; karar ayrı satıra yazılınca otomatik sayılamaz.
 
