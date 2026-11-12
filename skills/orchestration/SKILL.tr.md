@@ -245,7 +245,7 @@ dış araç bağımlılığı yaratmazlar ve mevcut projeler kendiliğinden taş
 
 | Katman | Kim | Ne zaman | Neye bakar |
 |---|---|---|---|
-| K1, aynı aile | görev başına taze `explorer` (SDD görev inceleyicisi); dal sonunda son inceleme | her alt ajan teslimi | spec'e uyum + kod kalitesi |
+| K1, aynı aile | görev başına taze `explorer` (SDD görev inceleyicisi); dal sonu son incelemeyi Claude Code'da `fable-reviewer` yapar (Codex'te taze `explorer`) | her alt ajan teslimi | spec'e uyum + kod kalitesi |
 | K2, öbür aile | Claude'dan: Codex (görev sınırında Sol, dal sonunda ve kilit noktalarda Astra); Codex'ten: Claude Opus (tek seçenek) | aşağıdaki iş türlerinde **zorunlu**; kilit noktalarda da (İkinci görüş) | öbür ailenin kör noktası, worker'ın test kanıtına karşı |
 
 Aynı aileden eleştirmen iyidir ama öbür aileden bir eleştirmen de bulunmalı; önemli ve büyük işten sonra karşılığını
@@ -334,9 +334,9 @@ neden [ölçüm 2026-09-26, çok aşamalı tek plan]: 20 saatte 5 audit, yeni bu
 gerçek bir hata yakaladı).
 
 İnceleyiciler tek adıma üst üste konmaz; iki istisna var: (1) dal sonu paketini paralel okuyan K1 ve K2 (başka aile,
-başka bakış); (2) kullanıcıya gidecek spec/planın son halinde önce danışman yalnız yaklaşımı sorar, sonra son metni
-`fable-reviewer` okur (Codex'te taze `explorer`), ardından son metne Astra (İkinci görüş › kilit nokta). Kullanıcıya
-gitmeyen ara taslak ve okumalar `explorer`'da kalır. Kim ve ne zaman:
+başka bakış); (2) kullanıcıya gidecek spec/planın son hali. Claude Code'da danışmana yalnız yaklaşım sorulur, sonra
+son metni `fable-reviewer` okur, ardından son metne K2 (Astra) bakar (İkinci görüş › kilit nokta). Codex'te son metni
+taze `explorer` okur, ardından K2 (Claude Opus). Kullanıcıya gitmeyen ara taslak ve okumalar `explorer`'da kalır. Kim ve ne zaman:
 Eleştirmen ailesi tablosu; danışman (Claude'da Fable: yön, yaklaşım, takılma): "Danışman (Claude tarafı)".
 
 ### Superpowers ile: "nasıl" oradan, "kim" bu ağaçtan
@@ -361,7 +361,7 @@ Claude ve Codex) kurulu sürüm farklıysa "re-audit the mapping table" notu ekl
 | "Model Selection" (cheap / standard / most capable) | yok say; model ajan dosyasından gelir; `model` parametresi yazma |
 | bütün SDD döngüsünü yürüten tek orkestratör alt ajanı | kullanma; orkestratör ana oturumdur (kendi işi için yardımcı açan alt ajan sorun değil) |
 | SDD "Always specify the model explicitly" | `model` parametresi yazma; ajan dosyası belirler (kapı Opus dışını reddeder) |
-| düzeltme döngüsünde SDD "escalate to a more capable model" | yükseltme yok (alt ajanlar için Opus'un üstü yok); tıkanan görevi yeni brief'le yeniden devret ya da danışmana sor |
+| düzeltme döngüsünde SDD "escalate to a more capable model" | yükseltme yok (`fable-reviewer` uygulayıcı değil, inceleme koltuğudur); tıkanan görevi yeni brief'le yeniden devret ya da danışmana sor |
 | SDD "the controller never fixes a finding itself" | düzeltmeyi worker yapar; devir güvenilmezse ana oturum yeni brief'le yeniden devreder ya da danışmana sorar, asla kendisi düzeltmez |
 | writing-plans "Native: I implement each task myself" seçeneği | sunma; yürütme varsayılan olarak alt ajan güdümlüdür ve yürütme yöntemi sorulmaz; plan içeriği onayı ayrı bir kapıdır ve sorulur |
 | using-git-worktrees konum seçimi | proje içi `.worktrees/` ya da aracın proje içi klasörü (Claude Code `.claude/worktrees/`); merge sonrası kaldır (Sınırlar › Worktree) |
@@ -399,9 +399,10 @@ Ana oturum şu olaylardan **hemen önce** danışır (karşılığını plan/mim
   değişiklik sohbet içinde verilse de "büyük plan" sayılır. neden [ölçüm 2026-10-11, oturum logları]: 8 oturumun 5'inde
   son danışma oturumun ilk %59'luk kısmında kaldı; bir aşamada 6 saat 1 danışmayla geçti, kapsam büyümesi ve 22 görevlik plan
   danışmasız kaldı (çıkarım: eski üç tetik bir kez karşılanınca "yapıldı" sayıldı).
-- **Astra ile sıra:** önce danışman ("doğru yaklaşım bu mu"), sonra son metin; aynı soruyu tekrarlamazlar.
-  Kullanıcıya gidecek spec, plan ya da tasarımın son halinde önce danışman (yalnız yaklaşım), sonra `fable-reviewer`
-  (son metin), en son Astra son metni okur (İkinci görüş › kilit nokta). Bilimsel/klinik seçenekte danışman → Astra.
+- **K2 ile sıra:** danışmana yalnız yaklaşım sorulur ("doğru yaklaşım bu mu"), sonra son metin okunur; aynı soruyu
+  tekrarlamazlar. Kullanıcıya gidecek spec, plan ya da tasarımın son halinde Claude Code'da sıra danışman (yalnız
+  yaklaşım) → `fable-reviewer` (son metin) → son metne K2 (Astra) olur (İkinci görüş › kilit nokta). Codex'te sıra taze
+  `explorer` (son metin) → K2 (Claude Opus) olur. Bilimsel/klinik seçenekte danışman → K2.
 - **Kayıt:** her danışmadan sonra projenin STATE'ine/defterine tek satır:
   `Advisor <date time> · <event> · <advice summary> · applied / not applied (why)`. neden: tavsiye metni logda
   şifrelidir; kayıt olmadan etkisi ölçülemez.
@@ -448,11 +449,13 @@ görsel, tekrarlanabilir; `--model astra|sol`, varsayılan astra; `--effort low|
   sohbette ancak `/clear` ya da `/compact` sonrasında etkili olur.
 - **Fable inceleme koltuğu:** `fable-reviewer` (`model: fable`, `effort: high`, salt-okur) yalnız dal sonu son
   incelemesi ve kullanıcıya gitmeden önce plan/spec'in son okuması için açılır; başka her iş yukarıdaki tiplerde kalır.
+  `fable-reviewer` açılamıyorsa (Fable erişimi yok, ajan dosyası yüklenmedi) taze `explorer` kullan ve kayda yaz.
 - **Ana oturum Fable ise** (yalnız kullanıcı açıkça seçtiyse): danışman da Fable olur ve bağımsız değildir; bir
-  pilotta Fable ana oturumdan yapılan iki danışman çağrısı yanıtsız kaldı (neden belirsiz, n=2). Geri dönülmez adımda
-  (main'e birleştirme, push, devir) yedek göz Astra K2 ya da taze `explorer`'dır. Danışman yanıt vermezse bekleme,
-  kayda yaz. Maliyet ~1,7 kat (100 tur başına, danışman hariç) [ölçüm]. Pilotta plandaki `K2: yes` bayrağı ve
-  Karar kimde kuralı (bilimsel/klinik cevabı kendin belirleme) gözden kaçtı.
+  iç denemede Fable ana oturumdan yapılan iki danışman çağrısı yanıtsız kaldı (neden belirsiz, n=2). Geri dönülmez
+  adımda (main'e birleştirme, push, devir) yedek göz Astra K2 ya da taze `explorer`'dır. Danışman yanıt vermezse
+  bekleme, kayda yaz. Fable ana oturum olarak tur başına belirgin biçimde daha pahalıdır (tek iç karşılaştırma); onu
+  yalnız sen seçtiğinde kullan. O denemede plandaki `K2: yes` bayrağı ve Karar kimde kuralı (bilimsel/klinik cevabı
+  kendin belirleme) gözden kaçtı.
 - **Effort mirası:** üst düzey `effortLevel`'ı asla high'ın altına ayarlama: `modelSettings` girdisi olmayan yeni bir
   Opus/Fable sessizce o değere düşer. Yeni sürümde effort'u sürecin içinden ölç (`printenv CLAUDE_EFFORT`).
 - **İkinci görüş, Astra audit'i.** Yalnız script kullanılamıyorsa ve aynı anda başka bir Codex çağrısı koşmuyorsa

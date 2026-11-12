@@ -253,7 +253,7 @@ external tool dependency, and existing projects are not migrated automatically.
 
 | Layer | Who | When | Looks at |
 |---|---|---|---|
-| K1, same family | fresh `explorer` per task (SDD task reviewer); final review at branch end | every subagent delivery | spec compliance + code quality |
+| K1, same family | fresh `explorer` per task (SDD task reviewer); the branch-end final review is done by `fable-reviewer` in Claude Code (a fresh `explorer` in Codex) | every subagent delivery | spec compliance + code quality |
 | K2, other family | from Claude: Codex (Sol at task boundary, Astra at branch end and key points); from Codex: Claude Opus (only option) | **required** for the work types below; also at key points (Second opinion) | the other family's blind spot, against the worker's test evidence |
 
 A same-family critic is fine, but an other-family critic must also be there; it pays off after important, large work.
@@ -340,9 +340,10 @@ brief asked "ready?", every report said "no". What slowed things was making the 
 one caught a real bug).
 
 Reviewers are not stacked on one step, with two exceptions: (1) K1 and K2 reading the same branch-end package in
-parallel (other family, other view); (2) the final version of a spec/plan that goes to the user: the advisor first asks
-only about the approach, then `fable-reviewer` reads the final text (a fresh `explorer` in Codex), then Astra on the
-final text (Second opinion › key point). Interim drafts and reads that do not go to the user stay with `explorer`.
+parallel (other family, other view); (2) the final version of a spec/plan that goes to the user. In Claude Code:
+the advisor is asked only about the approach, then `fable-reviewer` reads the final text, then K2 (Astra) on the
+final text (Second opinion › key point). In Codex: a fresh `explorer` reads the final text, then K2 (Claude Opus).
+Interim drafts and reads that do not go to the user stay with `explorer`.
 Who and when: Critic family table; advisor (Fable on Claude: direction, approach, stuck): "Advisor (Claude side)".
 
 ### With superpowers: "how" from there, "who" from this tree
@@ -367,7 +368,7 @@ re-auditing, update `tablo_surumu` and `tarih` in `hooks/superpowers_surum.json`
 | "Model Selection" (cheap / standard / most capable) | ignore; model comes from the agent file; do not write a `model` parameter |
 | a single orchestrator subagent running the whole SDD loop | do not use; the main session is the orchestrator (a subagent opening helpers for its own work is fine) |
 | SDD "Always specify the model explicitly" | do not write a `model` parameter; the agent file sets it (the gate rejects non-Opus) |
-| SDD "escalate to a more capable model" in the fix loop | no escalation (nothing above Opus for subagents); re-delegate the stuck task with a new brief or ask the advisor |
+| SDD "escalate to a more capable model" in the fix loop | no escalation (`fable-reviewer` is a review seat, not an implementer); re-delegate the stuck task with a new brief or ask the advisor |
 | SDD "the controller never fixes a finding itself" | the worker fixes; if the handoff is unreliable the main session re-delegates with a new brief or asks the advisor, never fixes it itself |
 | writing-plans "Native: I implement each task myself" option | do not offer it; execution defaults to subagent-driven and the execution method is not asked; plan-content approval is a separate gate and is asked |
 | using-git-worktrees location choice | in-project `.worktrees/` or the tool's in-project folder (Claude Code `.claude/worktrees/`); remove after merge (Limits › Worktree) |
@@ -407,10 +408,11 @@ The main session consults **right before** these events (plan/architecture decis
   5 of 8 sessions the last consultation fell in the first 59% of the session; in one stage 6 hours passed with 1
   consultation while scope growth and a 22-task plan went unconsulted (inference: the old three triggers counted as
   "done" once met).
-- **Order with Astra:** advisor first ("is this the right approach"), then the final text; they do not repeat the same
-  question. For the final version of a spec, plan or design that goes to the user the order is: advisor (approach
-  only) → `fable-reviewer` (final text) → then Astra on the final text (Second opinion › key point). For
-  scientific/clinical options: advisor → Astra.
+- **Order with K2:** the advisor is asked only about the approach ("is this the right approach"), then the final text
+  is read; they do not repeat the same question. For the final version of a spec, plan or design that goes to the
+  user the order in Claude Code is: advisor (approach only) → `fable-reviewer` (final text) → K2 (Astra) on the final
+  text (Second opinion › key point); in Codex: a fresh `explorer` (final text) → K2 (Claude Opus). For
+  scientific/clinical options: advisor → K2.
 - **Record:** after each consultation, one line in the project's STATE/ledger:
   `Advisor <date time> · <event> · <advice summary> · applied / not applied (why)`. why: the advice text is encrypted
   in the log; without a record its effect cannot be measured.
@@ -456,12 +458,14 @@ image, repeatable; `--model astra|sol`, default astra; `--effort low|medium|high
   effect in the current chat only after `/clear` or `/compact`.
 - **Fable review seat:** `fable-reviewer` (`model: fable`, `effort: high`, read-only) is opened only for the branch-end
   final review and the final read of a plan/spec before it goes to the user; every other job stays with the types
-  above.
+  above. If `fable-reviewer` cannot be opened (no Fable access, the agent file did not load), use a fresh `explorer`
+  and note it in the record.
 - **If the main session is Fable** (only when the user explicitly chose it): the advisor is Fable too and is not
-  independent; in a pilot, two advisor calls from a Fable main session got no reply (cause unclear, n=2). Before an
-  irreversible step (merge to main, push, handoff) the backup eye is Astra K2 or a fresh `explorer`. If the advisor
-  does not answer, do not wait; record it. Cost ~1.7× (per 100 turns, advisor excluded) [measured]. Missed in the
-  pilot: the plan's `K2: yes` flag and Who decides (do not set a scientific/clinical answer yourself).
+  independent; in one internal trial, two advisor calls from a Fable main session got no reply (cause unclear, n=2).
+  Before an irreversible step (merge to main, push, handoff) the backup eye is Astra K2 or a fresh `explorer`. If the
+  advisor does not answer, do not wait; record it. Fable as main session costs noticeably more per turn (one internal
+  comparison); use it only when you choose it. Missed in that trial: the plan's `K2: yes` flag and Who decides (do
+  not set a scientific/clinical answer yourself).
 - **Effort inheritance:** never set the top-level `effortLevel` below high: a new Opus/Fable without a `modelSettings`
   entry silently drops to that value. On a new release measure effort from inside the process
   (`printenv CLAUDE_EFFORT`).

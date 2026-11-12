@@ -70,7 +70,10 @@ is for reaching Codex's image tool from Claude.
   the requested id from `modeller.json` is written. If no full id is found, only the family name is written. An
   invalid result writes `undetermined (<reason>)` in place of the findings count.
   The record file is the project's STATE or ledger (the plan ledger in SDD), not a scratchpad: a scratchpad goes away
-  with the session, and the effect can no longer be counted.
+  with the session, and the effect can no longer be counted. `--olay` must be one line without the ` · ` field
+  separator; otherwise the call stops before the critic runs (exit 2), because a "plan" lookup would also match a
+  "plan · phase 2" line. A valid result whose line cannot be written for another file system reason returns exit 7
+  (the line is printed to stderr).
 - **Decision suffix:** once the findings are weighed, the decision is appended to the end of the same line; no new line
   is opened:
   `python3 elestirmen_kayit_eki.py --kayit docs/STATE.md --zaman "2026-01-02 03:04" --olay "plan" --karar applied|parked [--neden "..."]`
@@ -81,19 +84,20 @@ is for reaching Codex's image tool from Claude.
   |---|---|
   | 0 | appended |
   | 1 | line not found (also when the record file is missing) |
-  | 2 | usage error |
+  | 2 | usage error (also `--olay` with ` · ` or a line break, `--neden` with a line break; the record line stays one line) |
   | 4 | several lines matched; fix the file by hand |
   | 5 | the line already has a decision (`· applied`, `· not applied`, `· parked`); the one exception: `applied` is appended to a line whose only decision is `parked` (parked -> applied, once) |
   | 6 | the record lock was not taken within 10 s, or the lock file could not be opened; nothing appended |
-  | 7 | the record could not be read (permissions, non-UTF-8 content, a folder and the like); distinct from "line not found" |
+  | 7 | the record could not be read (permissions, non-UTF-8 content, a folder and the like) or not written (temporary file, replace, another file system error); distinct from "line not found"; no traceback |
 
   On every error code the file is left unchanged. The write goes through a temporary file + `os.replace`; the old file
   mode is kept, and if the record is a symlink the real target is written and the link stays.
 - **Record lock:** the decision suffix (read-modify-write) and the `aile_elestirmen.py --kayit` append take the same
-  advisory lock: `~/.cache/orchestration/kayit-kilit/<first 16 hex digits of the sha256 of the record's real path>.lock`
-  (`fcntl.flock`; symlinks are resolved, so a link and its target take the same lock). The lock file is permanent and
-  lives in the cache, so no `.lock` file lands in the project repository. If the lock folder cannot be created or the
-  lock file cannot be opened, the exit code is 6 too. When `aile_elestirmen.py` cannot take the lock, the result is
+  advisory lock: `${XDG_CACHE_HOME:-~/.cache}/orchestration/kayit-kilit/<first 16 hex digits of the sha256 of the
+  record's real path>.lock` (`fcntl.flock`; the same cache base as the hooks; symlinks are resolved, so a link and its
+  target take the same lock). The lock file is permanent and lives in the cache, so no `.lock` file lands in the
+  project repository. The lock needs write access to that cache folder: in a sandbox without it the lock folder cannot
+  be created or the lock file cannot be opened, the exit code is 6 and the reason goes to stderr. When `aile_elestirmen.py` cannot take the lock, the result is
   already written to `--cikti`; the line is not written, it is printed to stderr, and the exit code is 6. The `--kayit`
   append follows the file's line ending (CRLF for a CRLF file).
 - **Credentials (Codex):** every call uses a temporary `CODEX_HOME` containing only a 0600 copy of `auth.json`; user

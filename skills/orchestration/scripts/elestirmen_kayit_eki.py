@@ -9,10 +9,13 @@ Usage:
   elestirmen_kayit_eki.py --kayit docs/STATE.md --zaman "2026-01-02 03:04" --olay "plan" --karar applied [--neden "..."]
   elestirmen_kayit_eki.py --kayit docs/log.md --zaman "2026-01-02 03:04" --olay "plan" --karar parked --neden "..."
 Exit: 0 appended · 1 line not found (also when the file is missing) · 4 several lines matched · 5 the line already has
-a decision · 6 record lock not taken · 7 record unreadable · 2 usage error.
+a decision · 6 record lock not taken · 7 record unreadable or not written (other file system error) · 2 usage error
+(also `--olay` holding the " · " field separator or a line break, `--neden` holding a line break: the record is one line
+per event, and "plan" must not match a "plan · phase 2" line).
 
 Concurrency: the read-modify-write runs under fcntl.flock on
-`~/.cache/orchestration/kayit-kilit/<first 16 hex digits of the sha256 of the real path>.lock`; the aile_elestirmen.py
+`${XDG_CACHE_HOME:-~/.cache}/orchestration/kayit-kilit/<first 16 hex digits of the sha256 of the real path>.lock`
+(the same cache base as the hooks); the aile_elestirmen.py
 `--kayit` append takes the same lock through `kayda_ekle` (without it, the atomic replace could drop a line appended in
 between). The lock file is permanent; it lives in the cache, not next to the ledger, so no untracked `*.lock` files
 show up in project repositories.
@@ -32,6 +35,7 @@ from pathlib import Path
 
 KARARLAR = ("applied", "parked")
 KOD_YOK, KOD_COK, KOD_EKLI, KOD_KILIT, KOD_OKUNAMADI = 1, 4, 5, 6, 7
+AYIRICI = " · "  # field separator of the record line
 # Decision suffixes the rule book uses (`· applied / parked (why)`, the advisor's `· applied / not applied (why)`),
 # bare or followed by `(...)` or `: ...`. If one of them is present, the line counts as already decided.
 EK_VAR = re.compile(r" · (applied|not applied|parked)\b")
@@ -54,7 +58,17 @@ def kilit_yolu(yol: str | os.PathLike) -> Path:
     """Same real path -> same lock; the name is the first 16 hex digits of the real path's sha256 (short, no practical
     collisions)."""
     ad = hashlib.sha256(str(gercek_yol(yol)).encode("utf-8")).hexdigest()[:16]
-    return Path(os.path.expanduser("~")) / ".cache" / "orchestration" / "kayit-kilit" / f"{ad}.lock"
+    taban = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(taban) / "orchestration" / "kayit-kilit" / f"{ad}.lock"
+
+
+def olay_hatasi(olay: str) -> str | None:
+    """Why `--olay` cannot go on a record line, or None. Shared with aile_elestirmen.py `--kayit`."""
+    if AYIRICI in olay:
+        return f'--olay must not contain the field separator "{AYIRICI.strip()}"'
+    if "\n" in olay or "\r" in olay:
+        return "--olay must be a single line"
+    return None
 
 
 @contextlib.contextmanager
@@ -154,6 +168,10 @@ def ana(argv: list[str] | None = None) -> int:
         p.error('--zaman must have the form "YYYY-MM-DD HH:MM"')
     if a.karar == "parked" and not (a.neden or "").strip():
         p.error("--neden is required for parked")
+    if olay_hatasi(a.olay):
+        p.error(olay_hatasi(a.olay))
+    if a.neden and ("\n" in a.neden or "\r" in a.neden):
+        p.error("--neden must be a single line")
     neden = (a.neden or "").strip() or None
     if not gercek_yol(a.kayit).exists():  # no lock is opened for a missing ledger
         print(f"no record file, line not found: {a.kayit}", file=sys.stderr)
@@ -180,6 +198,9 @@ def ana(argv: list[str] | None = None) -> int:
     except KilitAlinamadi as e:
         print(f"record lock not taken ({e}), nothing appended", file=sys.stderr)
         return KOD_KILIT
+    except OSError as e:  # mkstemp, replace, a flock error other than "held": no traceback, the file is unchanged
+        print(f"record not written: {e.__class__.__name__}: {e.strerror or e}", file=sys.stderr)
+        return KOD_OKUNAMADI
     print(f"appended: {satir_oneki(a.zaman, a.olay)}…{ek_metni(a.karar, neden)}")
     return 0
 

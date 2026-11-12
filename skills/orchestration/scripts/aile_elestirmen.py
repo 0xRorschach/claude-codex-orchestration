@@ -10,8 +10,10 @@ Usage:
 The working folder (default: the current cwd) is passed explicitly in both directions: `-C` for Codex, process cwd for
 Claude. The critic reads only this folder (Codex read-only sandbox, Claude --restricted).
 In the record and summary lines the model appears as `family (full id)`; just the family if the full id is unknown.
-Exit: 0 valid result · 3 output does not match the schema (undetermined) · 6 valid result but the record lock was not
-taken (line not written, printed to stderr) · 77 codex login required · other: the tool's own code.
+Exit: 0 valid result · 2 usage error (also `--olay` holding " · " or a line break) · 3 output does not match the schema
+(undetermined) · 6 valid result but the record lock was not taken (line not written, printed to stderr) · 7 valid
+result but the record line could not be written (file system error, printed to stderr) · 77 codex login required ·
+other: the tool's own code.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ EK_GOREV = "Task: find the weakest point. If there is no significant weakness, s
 SALT_OKUR_CUMLESI = "You are read-only; do not modify files."
 KOD_GECERSIZ_CIKTI = 3
 KOD_KAYIT_KILIDI = 6
+KOD_KAYIT_YAZILAMADI = 7
 ONEMLER = ("yuksek", "orta", "dusuk")
 
 # Session markers [MEASURED 2026-11-07]: a Claude Code session's shell has CLAUDECODE=1 (`env`). In a Codex
@@ -113,6 +116,8 @@ def ana(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.kayit and not a.olay:
         p.error("--olay is required when --kayit is given")
+    if a.kayit and elestirmen_kayit_eki.olay_hatasi(a.olay):
+        p.error(elestirmen_kayit_eki.olay_hatasi(a.olay))
     aile = a.aile or varsayilan_aile()
     if aile is None:
         p.error("could not detect the running tool from the environment (CLAUDECODE or CODEX_THREAD_ID/"
@@ -165,6 +170,10 @@ def ana(argv: list[str] | None = None) -> int:
         except elestirmen_kayit_eki.KilitAlinamadi as e:
             print(f"record lock not taken ({e}); record not written, add the line by hand: {satir}", file=sys.stderr)
             kayit_kodu = KOD_KAYIT_KILIDI
+        except OSError as e:
+            print(f"record not written ({e.__class__.__name__}: {e.strerror or e}); add the line by hand: {satir}",
+                  file=sys.stderr)
+            kayit_kodu = KOD_KAYIT_YAZILAMADI
 
     if veri is not None:
         yuksek = sum(1 for b in veri["bulgular"] if b["onem"] == "yuksek")

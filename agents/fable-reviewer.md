@@ -1,6 +1,6 @@
 ---
 name: fable-reviewer
-description: Read-only, high-judgment final read (Fable · high). Use for two jobs only: the final whole-branch review at the end of a branch (SDD Final Review) and the final read of a plan or spec before it goes to the user. Do NOT use for anything else: per-task review, exploration, plan review -> explorer; search/map -> scanner. Does not dump files; returns results with file:line references. Changes nothing.
+description: 'Read-only, high-judgment final read (Fable · high). Use for two jobs only: the final whole-branch review at the end of a branch (SDD Final Review) and the final read of a plan or spec before it goes to the user. Do NOT use for anything else: per-task review, exploration, plan review -> explorer; search/map -> scanner. Does not dump files; returns results with file:line references. Changes nothing.'
 disallowedTools: Edit, Write, NotebookEdit, Agent
 model: fable
 effort: high

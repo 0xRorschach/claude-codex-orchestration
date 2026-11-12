@@ -19,11 +19,16 @@ SAHTE_CLAUDE = TESTLER / "sahte_claude.py"
 ILK_AUTH = b'{"tokens": "ilk"}'
 
 
+KOK_KULLANICI = hasattr(os, "geteuid") and os.geteuid() == 0  # root ignores chmod 0o500, so those tests are skipped
+
+
 def beklenen_kilit(kayit) -> Path:
-    """Expected place of the record lock, computed independently of the script: $HOME/.cache/orchestration/kayit-kilit/<sha256[:16]>.lock."""
+    """Expected place of the record lock, computed independently of the script:
+    ${XDG_CACHE_HOME:-$HOME/.cache}/orchestration/kayit-kilit/<sha256[:16]>.lock."""
     gercek = os.path.realpath(kayit)
     ad = hashlib.sha256(gercek.encode("utf-8")).hexdigest()[:16]
-    return Path(os.environ["HOME"]) / ".cache" / "orchestration" / "kayit-kilit" / f"{ad}.lock"
+    taban = os.environ.get("XDG_CACHE_HOME") or str(Path(os.environ["HOME"]) / ".cache")
+    return Path(taban) / "orchestration" / "kayit-kilit" / f"{ad}.lock"
 
 
 class SahteCodexTesti(unittest.TestCase):
@@ -55,6 +60,7 @@ class SahteCodexTesti(unittest.TestCase):
         yama = mock.patch.dict(os.environ, ortam)
         yama.start()
         self.addCleanup(yama.stop)
+        os.environ.pop("XDG_CACHE_HOME", None)  # the lock goes under the temporary HOME; restored by yama.stop
 
     def mod(self, ad: str, **ek: str) -> None:
         os.environ["SAHTE_CODEX_MOD"] = ad

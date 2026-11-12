@@ -113,7 +113,7 @@ Entries are in date order. Measurements are tagged `[measured ...]`, documentati
 
 ### 2026-10-11 · Advisor before cross-family audit
 
-- **Rule:** For specs and scientific options, the advisor is asked first (is this the right approach) and the cross-family audit second (what is wrong in the final text), and they do not repeat each other's question.
+- **Rule:** For specs and scientific options, the advisor is asked first (is this the right approach) and the cross-family audit second (what is wrong in the final text), and they do not repeat each other's question. Since 2026-11-12 the final version of a spec or plan that goes to the user runs, in Claude Code, advisor (approach only), then `fable-reviewer` (final text), then K2 (final text); in Codex, a fresh `explorer` (final text), then K2 (Claude Opus); see "Fable review seat".
 - **Why:** The two answer different questions; asking both the same one wastes a scarce call.
 
 ### 2026-10-11 · Sub-agents may consult the advisor freely
@@ -159,7 +159,7 @@ Entries are in date order. Measurements are tagged `[measured ...]`, documentati
 
 ### 2026-11-07 · Critic families: K1 same family, K2 different family
 
-- **Rule:** Every delivery gets a same-family reviewer (K1, fresh `explorer`); a different-family critic (K2) is mandatory for multi-task plan execution, multi-file changes outside an engine, schema, state-contract or gate changes and outward-facing output, by default at branch end in parallel with the final `explorer` review.
+- **Rule:** Every delivery gets a same-family reviewer (K1, fresh `explorer`); a different-family critic (K2) is mandatory for multi-task plan execution, multi-file changes outside an engine, schema, state-contract or gate changes and outward-facing output, by default at branch end in parallel with the final branch review. Exception since 2026-11-12: in Claude Code the branch-end final review is done by `fable-reviewer`, not a fresh `explorer` (Codex keeps the fresh `explorer`); see "Fable review seat".
 - **Why:** In one multi-task plan execution the per-task reviews came back clean, while the branch-end reading found 8 real gaps (cross-family) and 4 (`explorer`) [documented]; same-family review alone is acceptable, but a different family must also look after relatively large work.
 
 ### 2026-11-07 · K2 model split: lighter model at task boundary
@@ -192,3 +192,9 @@ Entries are in date order. Measurements are tagged `[measured ...]`, documentati
 
 - **Rule:** On narrowly briefed mechanical work, the lighter Codex model may act as implementer in its own worktree with concrete acceptance criteria and `worker`-style test evidence, while hard or precision work stays with the Opus `worker`.
 - **Why:** Loosened on observation only; the planned pilot was not run, so this rule is unmeasured.
+
+### 2026-11-12 · Fable review seat
+
+- **Rule:** In Claude Code a read-only `fable-reviewer` subagent (Fable, high effort) does two jobs only: the branch-end final review (SDD Final Review) and the final read of a plan or spec before it goes to the user. Every other review stays with `explorer`. Codex has no such seat and uses a fresh `explorer`. If `fable-reviewer` cannot be opened (no Fable access, the agent file did not load), a fresh `explorer` takes the read and the substitution is recorded.
+- **Why:** The branch end and a plan or spec on its way to the user are the points where judgment matters most, so the strongest model reads there. The advisor would see more, but it re-reads the whole conversation uncached on every call [documented]; the seat reads only the package it is given. Its benefit is unmeasured: one internal comparison (n=1), no blind comparison against `explorer`.
+- **Alternatives rejected:** Asking the advisor for the final read (cost grows with the transcript, and it is not independent of the main session); a fresh `explorer` for every final read on Claude Code (kept as the fallback).

@@ -730,6 +730,7 @@ class TestRecordEdges(FakeTools):
         self.assertFalse(self.record.exists())
 
     # Y2
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores chmod 0o500")
     def test_interrupted_install_is_cleaned_up(self):
         self.claude_dir.mkdir()
         before = snapshot_without_state(self.home)

@@ -3,10 +3,11 @@ import io
 import json
 import os
 import re
+import unittest
 from pathlib import Path
 from unittest import mock
 
-from ortak import BETIKLER, SahteCodexTesti, beklenen_kilit
+from ortak import BETIKLER, KOK_KULLANICI, SahteCodexTesti, beklenen_kilit
 
 import aile_elestirmen
 
@@ -186,6 +187,7 @@ class UctanUcaCodex(SahteCodexTesti):
         self.assertEqual(json.loads(cikti.read_text(encoding="utf-8")), GECERLI)
         self.assertIn("Cross-family", hata.getvalue())
 
+    @unittest.skipIf(KOK_KULLANICI, "root ignores chmod 0o500")
     def test_kayit_kilit_klasoru_yazilamazsa_6_traceback_yok(self):
         import elestirmen_kayit_eki  # noqa: F401
         self.mod("normal", SAHTE_SON_MESAJ=json.dumps(GECERLI))
@@ -202,6 +204,30 @@ class UctanUcaCodex(SahteCodexTesti):
         self.assertEqual(kayit.read_text(encoding="utf-8"), "# STATE\n")
         self.assertEqual(json.loads(cikti.read_text(encoding="utf-8")), GECERLI)
         self.assertNotIn("Traceback", hata.getvalue())
+
+    def test_kayit_olay_ayirici_ya_da_satir_sonu_kullanim_hatasi(self):
+        self.mod("normal", SAHTE_SON_MESAJ=json.dumps(GECERLI))
+        kayit = self.kok / "k.md"
+        kayit.write_text("# STATE\n", encoding="utf-8")
+        for olay in ("plan · phase 2", "plan\nx", "plan\rx"):
+            with self.subTest(olay=olay), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as c:
+                    self.kos("--kayit", str(kayit), "--olay", olay)
+                self.assertEqual(c.exception.code, 2)
+        self.assertEqual(kayit.read_text(encoding="utf-8"), "# STATE\n")
+        self.assertFalse(self.argv_dosyasi.exists(), "the critic must not be called on a usage error")
+
+    def test_kayit_yazilamazsa_7_traceback_yok(self):
+        self.mod("normal", SAHTE_SON_MESAJ=json.dumps(GECERLI))
+        kayit = self.kok / "klasor.md"
+        kayit.mkdir()  # a folder where the record file goes: the append fails with an OSError
+        hata = io.StringIO()
+        with contextlib.redirect_stderr(hata):
+            kod, cikti, _ = self.kos("--kayit", str(kayit), "--olay", "x")
+        self.assertEqual(kod, aile_elestirmen.KOD_KAYIT_YAZILAMADI)
+        self.assertEqual(json.loads(cikti.read_text(encoding="utf-8")), GECERLI)
+        self.assertNotIn("Traceback", hata.getvalue())
+        self.assertIn("Cross-family", hata.getvalue())
 
     def test_login_hatasi_kodu_gecer(self):
         self.mod("refresh-hata")

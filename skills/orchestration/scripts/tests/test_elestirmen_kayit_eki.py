@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ortak import BETIKLER, beklenen_kilit
+from ortak import BETIKLER, KOK_KULLANICI, beklenen_kilit
 
 import aile_elestirmen
 import elestirmen_kayit_eki as eki
@@ -34,6 +34,7 @@ class KayitEki(unittest.TestCase):
         ev = mock.patch.dict(os.environ, {"HOME": str(self.kok / "ev")})  # lock under ~/.cache; not the real home
         ev.start()
         self.addCleanup(ev.stop)
+        os.environ.pop("XDG_CACHE_HOME", None)  # restored by ev.stop
         self.dosya = self.kok / "STATE.md"
         self.satir_a = kayit((9, 5), "plan")
         self.satir_b = kayit((10, 30), "branch end K2")
@@ -223,6 +224,7 @@ class KayitEki(unittest.TestCase):
         eki.kayda_ekle(self.dosya, "new")
         self.assertEqual(list(self.kok.glob("*.lock")), [])
 
+    @unittest.skipIf(KOK_KULLANICI, "root ignores chmod 0o500")
     def test_kilit_klasoru_yazilamazsa_6_traceback_yok(self):
         klasor = beklenen_kilit(self.dosya).parent
         klasor.mkdir(parents=True)
@@ -269,6 +271,50 @@ class KayitEki(unittest.TestCase):
         for d in range(8):
             self.assertIn(satirlar[d] + " · applied\n", metin)
             self.assertIn(f"\nnew {d}\n", metin)
+
+    def test_olay_ayirici_ya_da_satir_sonu_kullanim_hatasi_dosya_degismez(self):
+        once = self.metin()
+        for olay, neden in (("plan · phase 2", None), ("plan\nx", None), ("plan\rx", None),
+                            ("plan", "two\nlines"), ("plan", "a\rb")):
+            with self.subTest(olay=olay, neden=neden):
+                argv = ["--zaman", "2026-11-12 09:05", "--olay", olay, "--karar", "applied"]
+                if neden:
+                    argv += ["--neden", neden]
+                kod, _, hata = self.kos(*argv)
+                self.assertEqual(kod, 2)
+                self.assertNotIn("Traceback", hata)
+                self.assertEqual(self.metin(), once)
+
+    def test_kilit_xdg_cache_home_altinda(self):
+        cache = self.kok / "xdg"
+        with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": str(cache)}):
+            kod, _, _ = self.kos("--zaman", "2026-11-12 09:05", "--olay", "plan", "--karar", "applied")
+            self.assertEqual(kod, 0)
+            self.assertTrue(beklenen_kilit(self.dosya).is_file())
+            self.assertTrue(str(beklenen_kilit(self.dosya)).startswith(str(cache)))
+        self.assertFalse((self.kok / "ev" / ".cache").exists())
+
+    @unittest.skipIf(KOK_KULLANICI, "root ignores chmod 0o500")
+    def test_gecici_dosya_acilamazsa_7_traceback_yok(self):
+        klasor = self.kok / "salt"
+        klasor.mkdir()
+        self.dosya = klasor / "STATE.md"
+        self.dosya.write_text(self.satir_a + "\n", encoding="utf-8")
+        os.chmod(klasor, 0o500)  # the file is readable, mkstemp next to it fails
+        self.addCleanup(os.chmod, klasor, 0o700)
+        kod, _, hata = self.kos("--zaman", "2026-11-12 09:05", "--olay", "plan", "--karar", "applied")
+        self.assertEqual(kod, eki.KOD_OKUNAMADI)
+        self.assertNotIn("Traceback", hata)
+        self.assertIn("not written", hata)
+        self.assertEqual(self.metin(), self.satir_a + "\n")
+
+    def test_flock_baska_oserror_7_traceback_yok(self):
+        once = self.metin()
+        with mock.patch.object(eki.fcntl, "flock", side_effect=OSError(9, "Bad file descriptor")):
+            kod, _, hata = self.kos("--zaman", "2026-11-12 09:05", "--olay", "plan", "--karar", "applied")
+        self.assertEqual(kod, eki.KOD_OKUNAMADI)
+        self.assertNotIn("Traceback", hata)
+        self.assertEqual(self.metin(), once)
 
 
 if __name__ == "__main__":
